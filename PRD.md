@@ -13,11 +13,11 @@ Enable users to privately capture voice journals and receive structured reflecti
 ## Essential Features
 
 ### Voice Recording
-- **Functionality**: Capture audio directly in the browser using Web Audio API, with visual feedback during recording
-- **Purpose**: Enable frictionless thought capture without requiring external devices or apps
+- **Functionality**: Capture audio directly in the browser using Web Audio API, with visual feedback during recording and guided reflection prompts
+- **Purpose**: Enable frictionless thought capture without requiring external devices or apps, with helpful prompts to guide meaningful reflection
 - **Trigger**: User clicks/taps record button on main interface
-- **Progression**: Click record → Visual waveform appears → Speak thoughts → Click stop → Audio uploads automatically → Entry appears in list with "processing" state → AI summary appears when ready
-- **Success criteria**: Recording starts within 500ms, audio quality is clear enough for transcription, upload completes reliably
+- **Progression**: View guiding questions → Click record → Visual waveform appears → Speak thoughts → Click stop → Audio uploads automatically → Entry appears in list with "processing" state → AI summary appears when ready
+- **Success criteria**: Recording starts within 500ms, audio quality is clear enough for transcription, upload completes reliably, guiding questions are visible to new users
 
 ### AI-Powered Transcription & Analysis
 - **Functionality**: Automatically transcribe audio to text, generate summaries, and detect emotional tone using the Spark LLM API
@@ -82,7 +82,7 @@ Animations should feel organic and responsive, mirroring the natural rhythm of b
 ## Component Selection
 - **Components**: 
   - Button (shadcn) - Primary actions with custom accent color, recording button gets special coral treatment with pulse animation
-  - Card (shadcn) - Journal entries with hover states, expandable for full transcript view
+  - Card (shadcn) - Journal entries with hover states, expandable for full transcript view; also used for guiding questions display
   - ScrollArea (shadcn) - For entry lists and long transcripts
   - Dialog (shadcn) - Confirmation for deletions and settings
   - Badge (shadcn) - Emotion labels with soft colors and rounded appearance
@@ -93,21 +93,25 @@ Animations should feel organic and responsive, mirroring the natural rhythm of b
   - Custom audio waveform visualizer during recording using canvas or SVG
   - Custom audio player with scrubbing timeline
   - Animated recording button with ripple/pulse effect
+  - Guiding questions component with numbered prompts and subtle gradient background
 - **States**: 
   - Recording button: rest (coral), hover (brighter coral), active (pulsing animation), disabled (muted)
   - Entry cards: collapsed, expanded, processing, error
   - All buttons show subtle elevation changes on hover
+  - Empty state shows guiding questions, populated state shows journal entries
 - **Icon Selection**: 
-  - Microphone (recording), Stop, Play/Pause (playback), Trash (delete), Sparkles (AI features), Lock (privacy), Download (export)
+  - Microphone (recording), Stop, Play/Pause (playback), Trash (delete), Sparkle (AI features and guiding questions), Lock (privacy), Download (export)
   - Use Phosphor Icons regular weight throughout
 - **Spacing**: 
   - Page padding: p-6 md:p-8
   - Card gap in lists: gap-4
   - Internal card padding: p-4 md:p-6
   - Button spacing: px-6 py-3 for primary, px-4 py-2 for secondary
+  - Guiding questions list spacing: gap-3 between items
 - **Mobile**: 
   - Single column layout stacks naturally
   - Recording button remains prominently accessible at bottom on mobile (sticky footer)
   - Entry cards full width on mobile, grid on larger screens
   - Transcript text remains readable at base size
   - Touch targets minimum 44px for all interactive elements
+  - Guiding questions card stacks vertically with comfortable padding

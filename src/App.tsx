@@ -4,6 +4,7 @@ import { Toaster, toast } from 'sonner'
 import { RecordButton } from '@/components/RecordButton'
 import { WaveformVisualizer } from '@/components/WaveformVisualizer'
 import { JournalEntryCard } from '@/components/JournalEntryCard'
+import { GuidingQuestions } from '@/components/GuidingQuestions'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { processJournalEntry } from '@/lib/ai-processing'
@@ -116,10 +117,13 @@ function App() {
 
         <div className="space-y-4">
           {entriesList.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">
-                No entries yet. Tap the microphone to start journaling.
-              </p>
+            <div className="space-y-6">
+              <GuidingQuestions />
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  Tap the microphone above to start journaling
+                </p>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
