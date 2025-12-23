@@ -1,6 +1,19 @@
+# FastAPI and server
 fastapi>=0.100.0
 uvicorn>=0.23.0
+python-multipart>=0.0.6
+
+# Database
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
+
+# Validation
 pydantic[email]>=2.0.0
-python-multipart>=0.0.6
+
+# Azure AI Services
+openai>=1.30.0
+azure-cognitiveservices-speech>=1.37.0
+azure-identity>=1.15.0
+
+# Utilities
+python-dotenv>=1.0.0
