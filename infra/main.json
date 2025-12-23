@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "2084142436395900757"
+      "templateHash": "4319126516617790402"
     }
   },
   "parameters": {
@@ -70,6 +70,12 @@
       "defaultValue": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
       "metadata": {
         "description": "Container image for the Worker"
+      }
+    },
+    "postgresAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL administrator password"
       }
     },
     "tags": {
@@ -342,6 +348,9 @@
           },
           "workerIdentityPrincipalId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.workerIdentityPrincipalId.value]"
+          },
+          "postgresAdminPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
           }
         },
         "template": {
@@ -351,7 +360,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "3869949859672011013"
+              "templateHash": "324203430899196558"
             }
           },
           "parameters": {
@@ -396,143 +405,137 @@
               "metadata": {
                 "description": "Principal ID of the Worker managed identity"
               }
+            },
+            "postgresAdminLogin": {
+              "type": "string",
+              "defaultValue": "pgadmin",
+              "minLength": 1,
+              "metadata": {
+                "description": "PostgreSQL administrator login name"
+              }
+            },
+            "postgresAdminPassword": {
+              "type": "securestring",
+              "metadata": {
+                "description": "PostgreSQL administrator password"
+              }
+            },
+            "postgresVersion": {
+              "type": "string",
+              "defaultValue": "16",
+              "allowedValues": [
+                "16",
+                "15",
+                "14",
+                "13",
+                "12"
+              ],
+              "metadata": {
+                "description": "PostgreSQL version"
+              }
+            },
+            "postgresSku": {
+              "type": "string",
+              "defaultValue": "Standard_B1ms",
+              "metadata": {
+                "description": "PostgreSQL SKU name (compute size)"
+              }
+            },
+            "postgresSkuTier": {
+              "type": "string",
+              "defaultValue": "Burstable",
+              "allowedValues": [
+                "Burstable",
+                "GeneralPurpose",
+                "MemoryOptimized"
+              ],
+              "metadata": {
+                "description": "PostgreSQL SKU tier"
+              }
+            },
+            "postgresStorageSizeGB": {
+              "type": "int",
+              "defaultValue": 32,
+              "minValue": 32,
+              "maxValue": 16384,
+              "metadata": {
+                "description": "PostgreSQL storage size in GB"
+              }
             }
           },
           "variables": {
-            "cosmosDbAccountName": "[format('cosmos-{0}', parameters('resourcePrefix'))]",
-            "cosmosDbDatabaseName": "voice-journal",
-            "cosmosDbContainerName": "journal-entries",
+            "postgresServerName": "[format('psql-{0}', parameters('resourcePrefix'))]",
+            "postgresDatabaseName": "voicejournal",
             "storageAccountName": "[take(format('st{0}data', parameters('resourcePrefixNoDash')), 24)]",
             "audioBlobContainerName": "audio-files",
-            "cosmosDbDataContributorRoleId": "00000000-0000-0000-0000-000000000002",
             "storageBlobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
           },
           "resources": [
             {
-              "type": "Microsoft.DocumentDB/databaseAccounts",
-              "apiVersion": "2024-05-15",
-              "name": "[variables('cosmosDbAccountName')]",
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2024-08-01",
+              "name": "[variables('postgresServerName')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
-              "kind": "GlobalDocumentDB",
+              "sku": {
+                "name": "[parameters('postgresSku')]",
+                "tier": "[parameters('postgresSkuTier')]"
+              },
               "properties": {
-                "databaseAccountOfferType": "Standard",
-                "locations": [
-                  {
-                    "locationName": "[parameters('location')]",
-                    "failoverPriority": 0,
-                    "isZoneRedundant": false
-                  }
-                ],
-                "consistencyPolicy": {
-                  "defaultConsistencyLevel": "Session"
+                "version": "[parameters('postgresVersion')]",
+                "administratorLogin": "[parameters('postgresAdminLogin')]",
+                "administratorLoginPassword": "[parameters('postgresAdminPassword')]",
+                "storage": {
+                  "storageSizeGB": "[parameters('postgresStorageSizeGB')]",
+                  "autoGrow": "Enabled"
                 },
-                "enableAutomaticFailover": false,
-                "enableMultipleWriteLocations": false,
-                "disableLocalAuth": false,
-                "capabilities": [
-                  {
-                    "name": "EnableServerless"
-                  }
-                ],
-                "backupPolicy": {
-                  "type": "Continuous",
-                  "continuousModeProperties": {
-                    "tier": "Continuous7Days"
-                  }
+                "backup": {
+                  "backupRetentionDays": 7,
+                  "geoRedundantBackup": "Disabled"
+                },
+                "highAvailability": {
+                  "mode": "Disabled"
+                },
+                "network": {
+                  "publicNetworkAccess": "Enabled"
+                },
+                "authConfig": {
+                  "activeDirectoryAuth": "Disabled",
+                  "passwordAuth": "Enabled"
                 }
               },
               "metadata": {
-                "description": "Azure Cosmos DB account for storing journal entries"
+                "description": "Azure PostgreSQL Flexible Server for storing journal entries"
               }
             },
             {
-              "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
-              "apiVersion": "2024-05-15",
-              "name": "[format('{0}/{1}', variables('cosmosDbAccountName'), variables('cosmosDbDatabaseName'))]",
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', variables('postgresServerName'), variables('postgresDatabaseName'))]",
               "properties": {
-                "resource": {
-                  "id": "[variables('cosmosDbDatabaseName')]"
-                }
+                "charset": "UTF8",
+                "collation": "en_US.utf8"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName'))]"
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
               ],
               "metadata": {
-                "description": "Cosmos DB database for voice journal"
+                "description": "PostgreSQL database for voice journal"
               }
             },
             {
-              "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
-              "apiVersion": "2024-05-15",
-              "name": "[format('{0}/{1}/{2}', variables('cosmosDbAccountName'), variables('cosmosDbDatabaseName'), variables('cosmosDbContainerName'))]",
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', variables('postgresServerName'), 'AllowAzureServices')]",
               "properties": {
-                "resource": {
-                  "id": "[variables('cosmosDbContainerName')]",
-                  "partitionKey": {
-                    "paths": [
-                      "/user_id"
-                    ],
-                    "kind": "Hash",
-                    "version": 2
-                  },
-                  "indexingPolicy": {
-                    "automatic": true,
-                    "indexingMode": "consistent",
-                    "includedPaths": [
-                      {
-                        "path": "/*"
-                      }
-                    ],
-                    "excludedPaths": [
-                      {
-                        "path": "/transcript/*"
-                      },
-                      {
-                        "path": "/\"_etag\"/?"
-                      }
-                    ]
-                  },
-                  "defaultTtl": -1
-                }
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDbAccountName'), variables('cosmosDbDatabaseName'))]"
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
               ],
               "metadata": {
-                "description": "Cosmos DB container for journal entries, partitioned by user_id"
-              }
-            },
-            {
-              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
-              "apiVersion": "2024-05-15",
-              "name": "[format('{0}/{1}', variables('cosmosDbAccountName'), guid(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName')), parameters('apiIdentityPrincipalId'), variables('cosmosDbDataContributorRoleId')))]",
-              "properties": {
-                "principalId": "[parameters('apiIdentityPrincipalId')]",
-                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName')), variables('cosmosDbDataContributorRoleId'))]",
-                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName'))]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName'))]"
-              ],
-              "metadata": {
-                "description": "API identity has Cosmos DB Data Contributor access"
-              }
-            },
-            {
-              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
-              "apiVersion": "2024-05-15",
-              "name": "[format('{0}/{1}', variables('cosmosDbAccountName'), guid(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName')), parameters('workerIdentityPrincipalId'), variables('cosmosDbDataContributorRoleId')))]",
-              "properties": {
-                "principalId": "[parameters('workerIdentityPrincipalId')]",
-                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName')), variables('cosmosDbDataContributorRoleId'))]",
-                "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName'))]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName'))]"
-              ],
-              "metadata": {
-                "description": "Worker identity has Cosmos DB Data Contributor access"
+                "description": "Allow Azure services to access PostgreSQL"
               }
             },
             {
@@ -628,15 +631,40 @@
             {
               "type": "Microsoft.KeyVault/vaults/secrets",
               "apiVersion": "2023-07-01",
-              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'cosmos-db-endpoint')]",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgres-connection-string')]",
               "properties": {
-                "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName')), '2024-05-15').documentEndpoint]"
+                "value": "[format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName, variables('postgresDatabaseName'))]"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName'))]"
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
               ],
               "metadata": {
-                "description": "Store Cosmos DB endpoint in Key Vault"
+                "description": "Store PostgreSQL connection string in Key Vault"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgres-host')]",
+              "properties": {
+                "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+              ],
+              "metadata": {
+                "description": "Store PostgreSQL host in Key Vault"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgres-password')]",
+              "properties": {
+                "value": "[parameters('postgresAdminPassword')]"
+              },
+              "metadata": {
+                "description": "Store PostgreSQL password in Key Vault"
               }
             },
             {
@@ -655,26 +683,33 @@
             }
           ],
           "outputs": {
-            "cosmosDbEndpoint": {
+            "postgresHost": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB account endpoint"
+                "description": "PostgreSQL server fully qualified domain name"
               },
-              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName')), '2024-05-15').documentEndpoint]"
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName]"
             },
-            "cosmosDbDatabaseName": {
+            "postgresDatabaseName": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB database name"
+                "description": "PostgreSQL database name"
               },
-              "value": "[variables('cosmosDbDatabaseName')]"
+              "value": "[variables('postgresDatabaseName')]"
             },
-            "cosmosDbContainerName": {
+            "postgresAdminLogin": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB container name"
+                "description": "PostgreSQL admin login"
               },
-              "value": "[variables('cosmosDbContainerName')]"
+              "value": "[parameters('postgresAdminLogin')]"
+            },
+            "postgresServerName": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL server name"
+              },
+              "value": "[variables('postgresServerName')]"
             },
             "storageAccountName": {
               "type": "string",
@@ -1180,11 +1215,14 @@
           "keyVaultName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.keyVaultName.value]"
           },
-          "cosmosDbEndpoint": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.cosmosDbEndpoint.value]"
+          "postgresHost": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresHost.value]"
           },
-          "cosmosDbDatabaseName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.cosmosDbDatabaseName.value]"
+          "postgresDatabaseName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresDatabaseName.value]"
+          },
+          "postgresAdminLogin": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresAdminLogin.value]"
           },
           "storageAccountName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.storageAccountName.value]"
@@ -1215,7 +1253,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "1278435617578694252"
+              "templateHash": "15860198464989488357"
             }
           },
           "parameters": {
@@ -1279,16 +1317,22 @@
                 "description": "Name of the Key Vault"
               }
             },
-            "cosmosDbEndpoint": {
+            "postgresHost": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB endpoint URL"
+                "description": "PostgreSQL host"
               }
             },
-            "cosmosDbDatabaseName": {
+            "postgresDatabaseName": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB database name"
+                "description": "PostgreSQL database name"
+              }
+            },
+            "postgresAdminLogin": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL admin login"
               }
             },
             "storageAccountName": {
@@ -1449,12 +1493,16 @@
                           "value": "[split(parameters('apiIdentityId'), '/')[8]]"
                         },
                         {
-                          "name": "COSMOS_DB_ENDPOINT",
-                          "value": "[parameters('cosmosDbEndpoint')]"
+                          "name": "POSTGRES_HOST",
+                          "value": "[parameters('postgresHost')]"
                         },
                         {
-                          "name": "COSMOS_DB_DATABASE_NAME",
-                          "value": "[parameters('cosmosDbDatabaseName')]"
+                          "name": "POSTGRES_DATABASE",
+                          "value": "[parameters('postgresDatabaseName')]"
+                        },
+                        {
+                          "name": "POSTGRES_USER",
+                          "value": "[parameters('postgresAdminLogin')]"
                         },
                         {
                           "name": "STORAGE_ACCOUNT_NAME",
@@ -1626,12 +1674,16 @@
                           "value": "[split(parameters('workerIdentityId'), '/')[8]]"
                         },
                         {
-                          "name": "COSMOS_DB_ENDPOINT",
-                          "value": "[parameters('cosmosDbEndpoint')]"
+                          "name": "POSTGRES_HOST",
+                          "value": "[parameters('postgresHost')]"
                         },
                         {
-                          "name": "COSMOS_DB_DATABASE_NAME",
-                          "value": "[parameters('cosmosDbDatabaseName')]"
+                          "name": "POSTGRES_DATABASE",
+                          "value": "[parameters('postgresDatabaseName')]"
+                        },
+                        {
+                          "name": "POSTGRES_USER",
+                          "value": "[parameters('postgresAdminLogin')]"
                         },
                         {
                           "name": "STORAGE_ACCOUNT_NAME",
@@ -1778,11 +1830,11 @@
           "keyVaultName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.keyVaultName.value]"
           },
-          "cosmosDbEndpoint": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.cosmosDbEndpoint.value]"
+          "postgresHost": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresHost.value]"
           },
-          "cosmosDbDatabaseName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.cosmosDbDatabaseName.value]"
+          "postgresDatabaseName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresDatabaseName.value]"
           },
           "storageAccountName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.storageAccountName.value]"
@@ -1819,7 +1871,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "15716851627558855482"
+              "templateHash": "11255211477670717345"
             }
           },
           "parameters": {
@@ -1829,16 +1881,16 @@
                 "description": "Name of the Key Vault"
               }
             },
-            "cosmosDbEndpoint": {
+            "postgresHost": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB endpoint"
+                "description": "PostgreSQL host"
               }
             },
-            "cosmosDbDatabaseName": {
+            "postgresDatabaseName": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB database name"
+                "description": "PostgreSQL database name"
               }
             },
             "storageAccountName": {
@@ -1903,9 +1955,9 @@
                 "apiUrl": "[parameters('apiAppUrl')]"
               },
               "dataServices": {
-                "cosmosDb": {
-                  "endpoint": "[parameters('cosmosDbEndpoint')]",
-                  "databaseName": "[parameters('cosmosDbDatabaseName')]"
+                "postgres": {
+                  "host": "[parameters('postgresHost')]",
+                  "databaseName": "[parameters('postgresDatabaseName')]"
                 },
                 "storage": {
                   "accountName": "[parameters('storageAccountName')]",
@@ -1960,12 +2012,12 @@
               },
               "value": "[parameters('keyVaultName')]"
             },
-            "cosmosEndpoint": {
+            "postgresHostOutput": {
               "type": "string",
               "metadata": {
-                "description": "Cosmos DB endpoint for data access"
+                "description": "PostgreSQL host for data access"
               },
-              "value": "[parameters('cosmosDbEndpoint')]"
+              "value": "[parameters('postgresHost')]"
             },
             "openAiServiceEndpoint": {
               "type": "string",
@@ -2015,12 +2067,12 @@
       },
       "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.keyVaultName.value]"
     },
-    "cosmosDbEndpoint": {
+    "postgresHost": {
       "type": "string",
       "metadata": {
-        "description": "Cosmos DB endpoint"
+        "description": "PostgreSQL host"
       },
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.cosmosDbEndpoint.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresHost.value]"
     },
     "openAiEndpoint": {
       "type": "string",

@@ -12,11 +12,11 @@
 @description('Name of the Key Vault')
 param keyVaultName string
 
-@description('Cosmos DB endpoint')
-param cosmosDbEndpoint string
+@description('PostgreSQL host')
+param postgresHost string
 
-@description('Cosmos DB database name')
-param cosmosDbDatabaseName string
+@description('PostgreSQL database name')
+param postgresDatabaseName string
 
 @description('Storage account name')
 param storageAccountName string
@@ -55,9 +55,9 @@ var deploymentSummary = {
     apiUrl: apiAppUrl
   }
   dataServices: {
-    cosmosDb: {
-      endpoint: cosmosDbEndpoint
-      databaseName: cosmosDbDatabaseName
+    postgres: {
+      host: postgresHost
+      databaseName: postgresDatabaseName
     }
     storage: {
       accountName: storageAccountName
@@ -98,8 +98,8 @@ output apiUrl string = apiAppUrl
 @description('Key Vault name for secrets management')
 output keyVault string = keyVaultName
 
-@description('Cosmos DB endpoint for data access')
-output cosmosEndpoint string = cosmosDbEndpoint
+@description('PostgreSQL host for data access')
+output postgresHostOutput string = postgresHost
 
 @description('Azure OpenAI endpoint for AI services')
 output openAiServiceEndpoint string = openAiEndpoint

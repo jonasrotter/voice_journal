@@ -38,7 +38,7 @@ Enable users to privately capture voice journals and receive structured reflecti
 [ worker Container App ]
    |
 +--> Azure OpenAI
-+--> Cosmos DB
++--> PostgreSQL DB
 +--> Blob Storage
 
 ## 3.2 Repository Structure (Updated)
@@ -60,7 +60,7 @@ root/
 - Managed identities for all container apps
 - Secrets stored in Azure Key Vault
 - No secrets in container images
-- Cosmos DB partitioned by user_id
+- PostgreSQL DB partitioned by user_id
 - Infrastructure enforces least privilege
 
 ## 4.2 Performance & Scaling

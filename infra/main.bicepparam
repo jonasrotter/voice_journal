@@ -49,6 +49,14 @@ param uiContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:l
 param workerContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 // ============================================================================
+// PostgreSQL Configuration
+// ============================================================================
+// IMPORTANT: Change this password before deployment!
+// In production, use Azure Key Vault or a secure parameter source.
+
+param postgresAdminPassword = 'ChangeMe123!' // TODO: Use secure parameter in production
+
+// ============================================================================
 // Resource Tags
 // ============================================================================
 

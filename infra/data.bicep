@@ -2,7 +2,7 @@
 // Voice Journal Infrastructure - Data Module
 // ============================================================================
 // This module creates:
-// - Azure Cosmos DB (NoSQL API) for journal entries
+// - Azure PostgreSQL Flexible Server for journal entries
 // - Azure Blob Storage for audio files
 // ============================================================================
 
@@ -31,136 +31,106 @@ param apiIdentityPrincipalId string
 @description('Principal ID of the Worker managed identity')
 param workerIdentityPrincipalId string
 
+@description('PostgreSQL administrator login name')
+@minLength(1)
+param postgresAdminLogin string = 'pgadmin'
+
+@description('PostgreSQL administrator password')
+@secure()
+param postgresAdminPassword string
+
+@description('PostgreSQL version')
+@allowed(['16', '15', '14', '13', '12'])
+param postgresVersion string = '16'
+
+@description('PostgreSQL SKU name (compute size)')
+param postgresSku string = 'Standard_B1ms'
+
+@description('PostgreSQL SKU tier')
+@allowed(['Burstable', 'GeneralPurpose', 'MemoryOptimized'])
+param postgresSkuTier string = 'Burstable'
+
+@description('PostgreSQL storage size in GB')
+@minValue(32)
+@maxValue(16384)
+param postgresStorageSizeGB int = 32
+
 // ============================================================================
 // Variables
 // ============================================================================
 
-var cosmosDbAccountName = 'cosmos-${resourcePrefix}'
-var cosmosDbDatabaseName = 'voice-journal'
-var cosmosDbContainerName = 'journal-entries'
+var postgresServerName = 'psql-${resourcePrefix}'
+var postgresDatabaseName = 'voicejournal'
 // Storage account names must be 3-24 chars, lowercase alphanumeric only
 var storageAccountName = take('st${resourcePrefixNoDash}data', 24)
 var audioBlobContainerName = 'audio-files'
 
 // Role definition IDs
-var cosmosDbDataContributorRoleId = '00000000-0000-0000-0000-000000000002' // Cosmos DB Built-in Data Contributor
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 
 // ============================================================================
-// Cosmos DB Account
+// PostgreSQL Flexible Server
 // ============================================================================
 
-@description('Azure Cosmos DB account for storing journal entries')
-resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
-  name: cosmosDbAccountName
+@description('Azure PostgreSQL Flexible Server for storing journal entries')
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
+  name: postgresServerName
   location: location
   tags: tags
-  kind: 'GlobalDocumentDB'
-  properties: {
-    databaseAccountOfferType: 'Standard'
-    locations: [
-      {
-        locationName: location
-        failoverPriority: 0
-        isZoneRedundant: false
-      }
-    ]
-    consistencyPolicy: {
-      defaultConsistencyLevel: 'Session'
-    }
-    enableAutomaticFailover: false
-    enableMultipleWriteLocations: false
-    disableLocalAuth: false // Enable for managed identity auth
-    capabilities: [
-      {
-        name: 'EnableServerless'
-      }
-    ]
-    backupPolicy: {
-      type: 'Continuous'
-      continuousModeProperties: {
-        tier: 'Continuous7Days'
-      }
-    }
+  sku: {
+    name: postgresSku
+    tier: postgresSkuTier
   }
-}
-
-// ============================================================================
-// Cosmos DB Database
-// ============================================================================
-
-@description('Cosmos DB database for voice journal')
-resource cosmosDbDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05-15' = {
-  parent: cosmosDbAccount
-  name: cosmosDbDatabaseName
   properties: {
-    resource: {
-      id: cosmosDbDatabaseName
+    version: postgresVersion
+    administratorLogin: postgresAdminLogin
+    administratorLoginPassword: postgresAdminPassword
+    storage: {
+      storageSizeGB: postgresStorageSizeGB
+      autoGrow: 'Enabled'
+    }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    highAvailability: {
+      mode: 'Disabled'
+    }
+    network: {
+      publicNetworkAccess: 'Enabled'
+    }
+    authConfig: {
+      activeDirectoryAuth: 'Disabled'
+      passwordAuth: 'Enabled'
     }
   }
 }
 
 // ============================================================================
-// Cosmos DB Container (Journal Entries)
+// PostgreSQL Database
 // ============================================================================
 
-@description('Cosmos DB container for journal entries, partitioned by user_id')
-resource cosmosDbContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
-  parent: cosmosDbDatabase
-  name: cosmosDbContainerName
+@description('PostgreSQL database for voice journal')
+resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
+  parent: postgresServer
+  name: postgresDatabaseName
   properties: {
-    resource: {
-      id: cosmosDbContainerName
-      partitionKey: {
-        paths: ['/user_id']
-        kind: 'Hash'
-        version: 2
-      }
-      indexingPolicy: {
-        automatic: true
-        indexingMode: 'consistent'
-        includedPaths: [
-          {
-            path: '/*'
-          }
-        ]
-        excludedPaths: [
-          {
-            path: '/transcript/*'
-          }
-          {
-            path: '/"_etag"/?'
-          }
-        ]
-      }
-      defaultTtl: -1 // No expiration by default
-    }
+    charset: 'UTF8'
+    collation: 'en_US.utf8'
   }
 }
 
 // ============================================================================
-// Cosmos DB RBAC Role Assignments
+// PostgreSQL Firewall Rules
 // ============================================================================
 
-@description('API identity has Cosmos DB Data Contributor access')
-resource apiCosmosDbRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
-  parent: cosmosDbAccount
-  name: guid(cosmosDbAccount.id, apiIdentityPrincipalId, cosmosDbDataContributorRoleId)
+@description('Allow Azure services to access PostgreSQL')
+resource postgresFirewallAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
+  parent: postgresServer
+  name: 'AllowAzureServices'
   properties: {
-    principalId: apiIdentityPrincipalId
-    roleDefinitionId: '${cosmosDbAccount.id}/sqlRoleDefinitions/${cosmosDbDataContributorRoleId}'
-    scope: cosmosDbAccount.id
-  }
-}
-
-@description('Worker identity has Cosmos DB Data Contributor access')
-resource workerCosmosDbRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
-  parent: cosmosDbAccount
-  name: guid(cosmosDbAccount.id, workerIdentityPrincipalId, cosmosDbDataContributorRoleId)
-  properties: {
-    principalId: workerIdentityPrincipalId
-    roleDefinitionId: '${cosmosDbAccount.id}/sqlRoleDefinitions/${cosmosDbDataContributorRoleId}'
-    scope: cosmosDbAccount.id
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
   }
 }
 
@@ -249,12 +219,30 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
 
-@description('Store Cosmos DB endpoint in Key Vault')
-resource cosmosDbEndpointSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+@description('Store PostgreSQL connection string in Key Vault')
+resource postgresConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
-  name: 'cosmos-db-endpoint'
+  name: 'postgres-connection-string'
   properties: {
-    value: cosmosDbAccount.properties.documentEndpoint
+    value: 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?sslmode=require'
+  }
+}
+
+@description('Store PostgreSQL host in Key Vault')
+resource postgresHostSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'postgres-host'
+  properties: {
+    value: postgresServer.properties.fullyQualifiedDomainName
+  }
+}
+
+@description('Store PostgreSQL password in Key Vault')
+resource postgresPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'postgres-password'
+  properties: {
+    value: postgresAdminPassword
   }
 }
 
@@ -271,14 +259,17 @@ resource storageAccountNameSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01'
 // Outputs
 // ============================================================================
 
-@description('Cosmos DB account endpoint')
-output cosmosDbEndpoint string = cosmosDbAccount.properties.documentEndpoint
+@description('PostgreSQL server fully qualified domain name')
+output postgresHost string = postgresServer.properties.fullyQualifiedDomainName
 
-@description('Cosmos DB database name')
-output cosmosDbDatabaseName string = cosmosDbDatabaseName
+@description('PostgreSQL database name')
+output postgresDatabaseName string = postgresDatabaseName
 
-@description('Cosmos DB container name')
-output cosmosDbContainerName string = cosmosDbContainerName
+@description('PostgreSQL admin login')
+output postgresAdminLogin string = postgresAdminLogin
+
+@description('PostgreSQL server name')
+output postgresServerName string = postgresServer.name
 
 @description('Storage account name')
 output storageAccountName string = storageAccount.name

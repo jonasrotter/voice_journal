@@ -42,11 +42,14 @@ param workerIdentityId string
 @description('Name of the Key Vault')
 param keyVaultName string
 
-@description('Cosmos DB endpoint URL')
-param cosmosDbEndpoint string
+@description('PostgreSQL host')
+param postgresHost string
 
-@description('Cosmos DB database name')
-param cosmosDbDatabaseName string
+@description('PostgreSQL database name')
+param postgresDatabaseName string
+
+@description('PostgreSQL admin login')
+param postgresAdminLogin string
 
 @description('Storage account name')
 param storageAccountName string
@@ -177,12 +180,16 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: split(apiIdentityId, '/')[8] // Extract identity name
             }
             {
-              name: 'COSMOS_DB_ENDPOINT'
-              value: cosmosDbEndpoint
+              name: 'POSTGRES_HOST'
+              value: postgresHost
             }
             {
-              name: 'COSMOS_DB_DATABASE_NAME'
-              value: cosmosDbDatabaseName
+              name: 'POSTGRES_DATABASE'
+              value: postgresDatabaseName
+            }
+            {
+              name: 'POSTGRES_USER'
+              value: postgresAdminLogin
             }
             {
               name: 'STORAGE_ACCOUNT_NAME'
@@ -353,12 +360,16 @@ resource workerContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: split(workerIdentityId, '/')[8]
             }
             {
-              name: 'COSMOS_DB_ENDPOINT'
-              value: cosmosDbEndpoint
+              name: 'POSTGRES_HOST'
+              value: postgresHost
             }
             {
-              name: 'COSMOS_DB_DATABASE_NAME'
-              value: cosmosDbDatabaseName
+              name: 'POSTGRES_DATABASE'
+              value: postgresDatabaseName
+            }
+            {
+              name: 'POSTGRES_USER'
+              value: postgresAdminLogin
             }
             {
               name: 'STORAGE_ACCOUNT_NAME'

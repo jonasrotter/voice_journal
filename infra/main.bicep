@@ -38,6 +38,10 @@ param uiContainerImage string = 'mcr.microsoft.com/azuredocs/containerapps-hello
 @description('Container image for the Worker')
 param workerContainerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
+@description('PostgreSQL administrator password')
+@secure()
+param postgresAdminPassword string
+
 @description('Tags to apply to all resources')
 param tags object = {
   application: 'voice-journal'
@@ -80,6 +84,7 @@ module data 'data.bicep' = {
     keyVaultName: security.outputs.keyVaultName
     apiIdentityPrincipalId: security.outputs.apiIdentityPrincipalId
     workerIdentityPrincipalId: security.outputs.workerIdentityPrincipalId
+    postgresAdminPassword: postgresAdminPassword
   }
 }
 
@@ -132,8 +137,9 @@ module containerApps 'containerapps.bicep' = {
     uiIdentityId: security.outputs.uiIdentityId
     workerIdentityId: security.outputs.workerIdentityId
     keyVaultName: security.outputs.keyVaultName
-    cosmosDbEndpoint: data.outputs.cosmosDbEndpoint
-    cosmosDbDatabaseName: data.outputs.cosmosDbDatabaseName
+    postgresHost: data.outputs.postgresHost
+    postgresDatabaseName: data.outputs.postgresDatabaseName
+    postgresAdminLogin: data.outputs.postgresAdminLogin
     storageAccountName: data.outputs.storageAccountName
     storageBlobEndpoint: data.outputs.storageBlobEndpoint
     openAiEndpoint: ai.outputs.openAiEndpoint
@@ -152,8 +158,8 @@ module outputs 'outputs.bicep' = {
   name: 'outputs-deployment'
   params: {
     keyVaultName: security.outputs.keyVaultName
-    cosmosDbEndpoint: data.outputs.cosmosDbEndpoint
-    cosmosDbDatabaseName: data.outputs.cosmosDbDatabaseName
+    postgresHost: data.outputs.postgresHost
+    postgresDatabaseName: data.outputs.postgresDatabaseName
     storageAccountName: data.outputs.storageAccountName
     storageBlobEndpoint: data.outputs.storageBlobEndpoint
     openAiEndpoint: ai.outputs.openAiEndpoint
@@ -179,8 +185,8 @@ output apiAppUrl string = containerApps.outputs.apiAppUrl
 @description('Name of the Key Vault')
 output keyVaultName string = security.outputs.keyVaultName
 
-@description('Cosmos DB endpoint')
-output cosmosDbEndpoint string = data.outputs.cosmosDbEndpoint
+@description('PostgreSQL host')
+output postgresHost string = data.outputs.postgresHost
 
 @description('Azure OpenAI endpoint')
 output openAiEndpoint string = ai.outputs.openAiEndpoint

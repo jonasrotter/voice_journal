@@ -51,7 +51,10 @@ param(
     [string]$ResourceGroupName,
 
     [Parameter()]
-    [string]$SubscriptionId
+    [string]$SubscriptionId,
+
+    [Parameter()]
+    [securestring]$PostgresPassword
 )
 
 # ============================================================================
@@ -66,6 +69,14 @@ if (-not $ResourceGroupName) {
     $ResourceGroupName = "rg-$BaseName-$Environment"
 }
 
+# Handle PostgreSQL password
+if (-not $PostgresPassword) {
+    $PostgresPassword = Read-Host -AsSecureString -Prompt "Enter PostgreSQL admin password (min 8 chars, must include uppercase, lowercase, number)"
+}
+$pgPasswordPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
+    [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($PostgresPassword)
+)
+
 # Script location
 $ScriptPath = $PSScriptRoot
 $MainBicepFile = Join-Path $ScriptPath 'main.bicep'
@@ -76,17 +87,17 @@ $MainBicepFile = Join-Path $ScriptPath 'main.bicep'
 
 function Write-Step {
     param([string]$Message)
-    Write-Host "`n▶ $Message" -ForegroundColor Cyan
+    Write-Host "`n>> $Message" -ForegroundColor Cyan
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "✓ $Message" -ForegroundColor Green
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Write-ErrorMessage {
     param([string]$Message)
-    Write-Host "✗ $Message" -ForegroundColor Red
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
 function Test-AzureCLI {
@@ -162,6 +173,7 @@ function Deploy-Infrastructure {
         [string]$BicepFile,
         [string]$Environment,
         [string]$BaseName,
+        [string]$PgPassword,
         [bool]$WhatIf
     )
     
@@ -178,7 +190,7 @@ function Deploy-Infrastructure {
         '--resource-group', $ResourceGroup,
         '--template-file', $BicepFile,
         '--name', $deploymentName,
-        '--parameters', "environment=$Environment", "baseName=$BaseName",
+        '--parameters', "environment=$Environment", "baseName=$BaseName", "postgresAdminPassword=$PgPassword",
         '--output', 'json'
     )
     
@@ -214,31 +226,28 @@ function Show-Outputs {
     
     $outputs = $DeploymentResult.properties.outputs
     
-    Write-Host "`n┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor Green
-    Write-Host "│                    DEPLOYMENT COMPLETE                          │" -ForegroundColor Green
-    Write-Host "├─────────────────────────────────────────────────────────────────┤" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "==================================================================" -ForegroundColor Green
+    Write-Host "                    DEPLOYMENT COMPLETE                           " -ForegroundColor Green
+    Write-Host "==================================================================" -ForegroundColor Green
     
     if ($outputs.uiAppUrl) {
-        Write-Host "│  UI URL:        $($outputs.uiAppUrl.value.PadRight(40))│" -ForegroundColor Green
+        Write-Host "  UI URL:        $($outputs.uiAppUrl.value)" -ForegroundColor Green
     }
     if ($outputs.apiAppUrl) {
-        Write-Host "│  API URL:       $($outputs.apiAppUrl.value.PadRight(40))│" -ForegroundColor Green
+        Write-Host "  API URL:       $($outputs.apiAppUrl.value)" -ForegroundColor Green
     }
     if ($outputs.keyVaultName) {
-        Write-Host "│  Key Vault:     $($outputs.keyVaultName.value.PadRight(40))│" -ForegroundColor Green
+        Write-Host "  Key Vault:     $($outputs.keyVaultName.value)" -ForegroundColor Green
     }
-    if ($outputs.cosmosDbEndpoint) {
-        $cosmosShort = $outputs.cosmosDbEndpoint.value
-        if ($cosmosShort.Length -gt 40) { $cosmosShort = $cosmosShort.Substring(0, 37) + "..." }
-        Write-Host "│  Cosmos DB:     $($cosmosShort.PadRight(40))│" -ForegroundColor Green
+    if ($outputs.postgresHost) {
+        Write-Host "  PostgreSQL:    $($outputs.postgresHost.value)" -ForegroundColor Green
     }
     if ($outputs.openAiEndpoint) {
-        $oaiShort = $outputs.openAiEndpoint.value
-        if ($oaiShort.Length -gt 40) { $oaiShort = $oaiShort.Substring(0, 37) + "..." }
-        Write-Host "│  OpenAI:        $($oaiShort.PadRight(40))│" -ForegroundColor Green
+        Write-Host "  OpenAI:        $($outputs.openAiEndpoint.value)" -ForegroundColor Green
     }
     
-    Write-Host "└─────────────────────────────────────────────────────────────────┘" -ForegroundColor Green
+    Write-Host "==================================================================" -ForegroundColor Green
     
     Write-Host "`nNext Steps:" -ForegroundColor Cyan
     Write-Host "  1. Build and push your container images to a registry"
@@ -253,9 +262,9 @@ function Show-Outputs {
 # ============================================================================
 
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════════════════════════════╗" -ForegroundColor Magenta
-Write-Host "║           Voice Journal Infrastructure Deployment                 ║" -ForegroundColor Magenta
-Write-Host "╚═══════════════════════════════════════════════════════════════════╝" -ForegroundColor Magenta
+Write-Host "==================================================================" -ForegroundColor Magenta
+Write-Host "           Voice Journal Infrastructure Deployment                " -ForegroundColor Magenta
+Write-Host "==================================================================" -ForegroundColor Magenta
 
 # Check prerequisites
 $account = Test-AzureCLI
@@ -280,6 +289,7 @@ $result = Deploy-Infrastructure `
     -BicepFile $MainBicepFile `
     -Environment $Environment `
     -BaseName $BaseName `
+    -PgPassword $pgPasswordPlain `
     -WhatIf $WhatIfPreference
 
 # Show outputs

@@ -25,8 +25,8 @@ Azure Bicep infrastructure-as-code for the Voice Journal application.
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-│  │   Key Vault  │  │  Cosmos DB   │  │ Blob Storage │  │ Azure OpenAI │    │
-│  │   (Secrets)  │  │  (NoSQL DB)  │  │ (Audio Files)│  │  (GPT/Whisper)│   │
+│  │   Key Vault  │  │ PostgreSQL   │  │ Blob Storage │  │ Azure OpenAI │    │
+│  │   (Secrets)  │  │  (Database)  │  │ (Audio Files)│  │  (GPT/Whisper)│   │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -44,7 +44,7 @@ Azure Bicep infrastructure-as-code for the Voice Journal application.
 | `main.bicep` | Main orchestration file - deploys all modules |
 | `main.bicepparam` | Parameters file for deployment configuration |
 | `security.bicep` | Key Vault and Managed Identities |
-| `data.bicep` | Cosmos DB and Blob Storage |
+| `data.bicep` | PostgreSQL Flexible Server and Blob Storage |
 | `ai.bicep` | Azure OpenAI service and model deployments |
 | `queues.bicep` | Service Bus namespace and queues |
 | `containerapps.bicep` | Container Apps Environment and apps |
@@ -168,7 +168,7 @@ az deployment group show \
 | `id-voicejournal-{env}-api` | Managed Identity | API authentication |
 | `id-voicejournal-{env}-ui` | Managed Identity | UI authentication |
 | `id-voicejournal-{env}-worker` | Managed Identity | Worker authentication |
-| `cosmos-voicejournal-{env}` | Cosmos DB | Journal entries storage |
+| `psql-voicejournal-{env}` | PostgreSQL Flexible Server | Journal entries storage |
 | `stvoicejournal{env}` | Storage Account | Audio files storage |
 | `oai-voicejournal-{env}` | Azure OpenAI | AI processing |
 | `sb-voicejournal-{env}` | Service Bus | Message queue |
@@ -208,7 +208,7 @@ az deployment group create \
 - **Managed Identities**: No secrets in container images
 - **Key Vault**: Centralized secrets management
 - **RBAC**: Least-privilege access control
-- **Cosmos DB Partitioning**: User data isolation via `user_id`
+- **PostgreSQL SSL**: Encrypted connections required
 - **Private Networking**: Can be enabled for production
 
 ## Scaling
@@ -224,7 +224,7 @@ az deployment group create \
 
 ## Cost Optimization
 
-- **Serverless Cosmos DB**: Pay-per-request pricing
+- **Burstable PostgreSQL**: Cost-effective for dev/test workloads
 - **Consumption tier**: Container Apps
 - **Worker scales to zero**: When no messages in queue
 - **Standard tier**: Service Bus (cost-effective)
