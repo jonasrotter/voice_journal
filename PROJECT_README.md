@@ -54,7 +54,7 @@ voice_journal/
 ### Backend Setup
 
 ```bash
-cd voice_journal
+cd api
 
 # Create virtual environment
 python -m venv venv
@@ -66,9 +66,6 @@ pip install -r api/requirements.txt
 # Set environment variables
 export DATABASE_URL="postgresql://user:password@localhost:5432/voice_journal"
 export SECRET_KEY="your-secret-key-change-in-production"
-
-# Run database migrations (create tables)
-python -c "from api.db.database import init_db; init_db()"
 
 # Start server
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
@@ -83,8 +80,6 @@ The frontend is a static site that can be served by any web server. For developm
 cd ui
 python -m http.server 3000
 
-# Or use the FastAPI static file serving
-# (already configured in api/main.py)
 ```
 
 ### Running Tests

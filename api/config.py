@@ -8,11 +8,8 @@ class Settings:
     
     def __init__(self):
         """Initialize settings from environment variables."""
-        # Database
-        self.DATABASE_URL: str = os.getenv(
-            "DATABASE_URL", 
-            "postgresql://postgres:postgres@localhost:5432/voice_journal"
-        )
+        # Database - support both DATABASE_URL and individual components
+        self.DATABASE_URL: str = self._build_database_url()
         
         # JWT
         self.SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
@@ -56,6 +53,33 @@ class Settings:
     def is_azure_storage_configured(self) -> bool:
         """Check if Azure Storage is properly configured."""
         return bool(self.AZURE_STORAGE_ACCOUNT_NAME and self.AZURE_STORAGE_ACCOUNT_KEY)
+    
+    def _build_database_url(self) -> str:
+        """Build DATABASE_URL from environment variables.
+        
+        Supports either:
+        - DATABASE_URL directly
+        - Individual POSTGRES_* components (for Azure Container Apps)
+        """
+        # Check for direct DATABASE_URL first
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            return database_url
+        
+        # Build from individual components
+        host = os.getenv("POSTGRES_HOST", "localhost")
+        port = os.getenv("POSTGRES_PORT", "5432")
+        database = os.getenv("POSTGRES_DATABASE", "voice_journal")
+        user = os.getenv("POSTGRES_USER", "postgres")
+        password = os.getenv("POSTGRES_PASSWORD", "")
+        
+        # For Azure PostgreSQL with managed identity, password may be empty
+        # In that case, we need to get a token
+        if not password and host != "localhost":
+            # Azure PostgreSQL with managed identity - password will be set in database.py
+            return f"postgresql://{user}@{host}:{port}/{database}?sslmode=require"
+        
+        return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 
 # Singleton - will be initialized after dotenv is loaded

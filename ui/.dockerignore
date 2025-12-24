@@ -1,0 +1,18 @@
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentation
+*.md
+
+# Development
+node_modules/
+.vscode/
+.idea/
+
+# Logs
+*.log
