@@ -1,7 +1,10 @@
 """Journal Entry router."""
+import os
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+import io
 
 from api.db import get_db
 from api.auth.dependencies import get_current_user
@@ -15,6 +18,7 @@ from api.entries.schemas import (
 )
 from api.entries import service
 from api.ai.processing import process_entry_background
+from api.storage.blob_service import get_storage_service
 from api.config import get_settings
 
 settings = get_settings()
@@ -163,3 +167,61 @@ def reprocess_entry(
     background_tasks.add_task(process_entry_background, entry.id, db)
     
     return EntryRead.model_validate(entry)
+
+
+@router.get("/{entry_id}/audio")
+def stream_audio(
+    entry_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> StreamingResponse:
+    """
+    Stream audio file for an entry.
+    
+    This endpoint acts as a proxy to Azure Blob Storage, allowing the frontend
+    to access audio files without needing direct blob storage credentials.
+    Works with DefaultAzureCredential (Azure CLI locally, Managed Identity in Azure).
+    """
+    entry = service.get_entry_by_id_for_user(db, entry_id, current_user.id)
+    
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Entry not found"
+        )
+    
+    if not entry.audio_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No audio file associated with this entry"
+        )
+    
+    try:
+        storage_service = get_storage_service()
+        audio_data = storage_service.download_audio(entry.audio_url)
+        
+        # Determine content type from URL extension
+        ext = os.path.splitext(entry.audio_url)[1].lower()
+        content_types = {
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".webm": "audio/webm",
+            ".ogg": "audio/ogg",
+            ".m4a": "audio/mp4",
+            ".flac": "audio/flac"
+        }
+        content_type = content_types.get(ext, "application/octet-stream")
+        
+        return StreamingResponse(
+            io.BytesIO(audio_data),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"inline; filename=audio{ext}",
+                "Accept-Ranges": "bytes"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve audio: {str(e)}"
+        )

@@ -238,9 +238,10 @@ export async function reprocessEntry(entryId) {
 // ============ Audio URL Helper ============
 
 /**
- * Get full audio URL
- * @param {string} audioUrl - Relative audio URL from entry
+ * Get full audio URL - returns direct URL for local files or legacy URLs
+ * @param {string} audioUrl - Audio URL from entry
  * @returns {string} Full URL
+ * @deprecated Use fetchAudioBlob with entry ID for Azure Blob Storage
  */
 export function getAudioUrl(audioUrl) {
     if (audioUrl.startsWith('http')) {
@@ -248,4 +249,40 @@ export function getAudioUrl(audioUrl) {
     }
     // Audio files are served from /uploads/audio/
     return `/uploads/audio/${audioUrl.split('/').pop()}`;
+}
+
+/**
+ * Get audio stream URL via backend proxy
+ * This endpoint streams audio from Azure Blob Storage through the backend,
+ * handling authentication with DefaultAzureCredential (Azure CLI locally, Managed Identity in Azure).
+ * @param {string} entryId - Entry UUID
+ * @returns {string} Full URL to audio stream endpoint
+ */
+export function getAudioStreamUrl(entryId) {
+    return `${API_BASE}/entries/${entryId}/audio`;
+}
+
+/**
+ * Fetch audio as Blob with authentication
+ * HTML audio elements cannot send Authorization headers, so we fetch the audio
+ * via JavaScript with proper auth and create a Blob URL for playback.
+ * @param {string} entryId - Entry UUID
+ * @returns {Promise<string>} Blob URL for audio playback
+ */
+export async function fetchAudioBlobUrl(entryId) {
+    const url = `${API_BASE}/entries/${entryId}/audio`;
+    const token = getToken();
+    
+    const response = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Failed to fetch audio: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
 }
