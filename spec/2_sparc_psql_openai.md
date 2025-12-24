@@ -20,7 +20,7 @@ Enable users to privately capture voice journals and receive structured reflecti
 - AI processing does not block UI
 - Containers scale independently
 - Infrastructure reproducible from source control
-- Full data deletion across Cosmos DB + Blob Storage
+- Full data deletion across PostgreSQL DB + Blob Storage
 
 # 2. Pseudocode
 (unchanged — see prior version)
@@ -66,7 +66,6 @@ root/
 ## 4.2 Performance & Scaling
 - Azure Container Apps autoscaling (KEDA)
 - Worker containers scale on queue depth
-- Cosmos DB autoscale throughput
 - Blob Storage optimized for large audio files
 
 ## 4.3 Reliability & Maintainability
@@ -80,7 +79,7 @@ root/
 - App deployable via az deployment group create
 - All infra defined in /infra
 - Containers running in Azure Container Apps
-- Azure OpenAI, Cosmos DB, Blob Storage provisioned
+- Azure OpenAI, PostgreSQL DB, Blob Storage provisioned
 - Unit, integration, and contract tests passing
 - Observability enabled
 

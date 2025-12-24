@@ -1,10 +1,18 @@
 """Database connection and session management."""
+import os
+from dotenv import load_dotenv
+
+# Load environment variables FIRST before importing settings
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from typing import Generator
 
-from api.config import settings
+from api.config import get_settings
+
+settings = get_settings()
 
 # SQLite doesn't support pool_size/max_overflow, so conditionally set options
 if settings.DATABASE_URL.startswith("sqlite"):

@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from api.db import get_db
-from api.config import settings
+from api.config import get_settings
+
+settings = get_settings()
 from api.auth.schemas import Token, LoginRequest, RegisterRequest
 from api.auth.utils import verify_password, create_access_token
 from api.users.schemas import UserRead, UserCreate

@@ -4,7 +4,8 @@
  */
 
 // In development, point to backend server; in production, use relative path
-const API_BASE = window.location.port === '3000' 
+const DEV_PORTS = ['3000', '5173', '5174'];
+const API_BASE = DEV_PORTS.includes(window.location.port)
     ? 'http://localhost:8000/api/v1' 
     : '/api/v1';
 

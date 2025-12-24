@@ -15,7 +15,9 @@ from api.entries.schemas import (
 )
 from api.entries import service
 from api.ai.processing import process_entry_background
-from api.config import settings
+from api.config import get_settings
+
+settings = get_settings()
 
 router = APIRouter(prefix="/entries", tags=["entries"])
 
@@ -49,8 +51,8 @@ async def create_entry(
                 detail=f"Unsupported audio format. Allowed: {', '.join(allowed_types)}"
             )
     
-    # Store audio file
-    audio_url = service.store_audio_file(content, audio.filename or "audio.wav")
+    # Store audio file (with username for Azure Blob naming)
+    audio_url = service.store_audio_file(content, audio.filename or "audio.wav", current_user.email)
     
     # Create entry in database
     entry = service.create_entry(db, current_user.id, audio_url)

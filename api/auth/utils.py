@@ -7,7 +7,9 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from api.config import settings
+from api.config import get_settings
+
+settings = get_settings()
 
 
 def get_password_hash(password: str) -> str:

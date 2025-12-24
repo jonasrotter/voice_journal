@@ -16,7 +16,9 @@ import logging
 from uuid import UUID
 from typing import Optional, Tuple
 
-from api.config import settings
+from api.config import get_settings
+
+settings = get_settings()
 from api.entries.schemas import EntryStatus
 
 logger = logging.getLogger(__name__)
@@ -246,11 +248,33 @@ def process_entry_background(entry_id: UUID, db_session) -> None:
         entry.status = EntryStatus.PROCESSING
         db.commit()
         
-        # Get audio file path
-        audio_path = os.path.join(
-            settings.UPLOAD_DIR,
-            os.path.basename(entry.audio_url)
-        )
+        # Get audio file - download from Azure Blob Storage or use local path
+        audio_url = entry.audio_url
+        
+        if settings.is_azure_storage_configured() and "blob.core.windows.net" in audio_url:
+            # Download from Azure Blob Storage to temp file
+            import tempfile
+            from api.storage import get_storage_service
+            
+            storage = get_storage_service()
+            audio_data = storage.download_audio(audio_url)
+            
+            # Get file extension from URL
+            file_ext = os.path.splitext(audio_url)[1] or ".wav"
+            
+            # Create temp file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_ext)
+            temp_file.write(audio_data)
+            temp_file.close()
+            audio_path = temp_file.name
+            cleanup_temp = True
+        else:
+            # Use local file path
+            audio_path = os.path.join(
+                settings.UPLOAD_DIR,
+                os.path.basename(audio_url)
+            )
+            cleanup_temp = False
         
         logger.info(f"Processing entry {entry_id} with mode: {settings.AI_PROCESSING_MODE}")
         
@@ -281,5 +305,11 @@ def process_entry_background(entry_id: UUID, db_session) -> None:
             logger.error(f"Failed to update entry status: {commit_error}")
         
     finally:
+        # Cleanup temp file if created
+        if 'cleanup_temp' in locals() and cleanup_temp and 'audio_path' in locals():
+            try:
+                os.unlink(audio_path)
+            except Exception:
+                pass
         db.close()
 

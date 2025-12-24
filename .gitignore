@@ -1,0 +1,5 @@
+#Ignore all files
+*.jpg
+
+#Ignore Environment files
+*.env

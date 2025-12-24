@@ -1,15 +1,23 @@
 """Main FastAPI application."""
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file BEFORE any other imports
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-import os
 
-from api.config import settings
+from api.config import get_settings
 from api.db.database import init_db
 from api.auth.router import router as auth_router
 from api.users.router import router as users_router
 from api.entries.router import router as entries_router
+
+# Get settings after dotenv is loaded
+settings = get_settings()
 
 # Create FastAPI app
 app = FastAPI(

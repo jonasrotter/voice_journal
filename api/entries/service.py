@@ -8,7 +8,9 @@ from sqlalchemy import desc
 
 from api.entries.models import JournalEntry
 from api.entries.schemas import EntryUpdate, EntryStatus
-from api.config import settings
+from api.config import get_settings
+
+settings = get_settings()
 
 
 def get_entry_by_id(db: Session, entry_id: UUID) -> Optional[JournalEntry]:
@@ -100,16 +102,36 @@ def delete_entry(db: Session, entry: JournalEntry) -> None:
     """Permanently delete an entry and its associated audio file."""
     # Delete audio file
     if entry.audio_url:
-        audio_path = os.path.join(settings.UPLOAD_DIR, os.path.basename(entry.audio_url))
-        if os.path.exists(audio_path):
-            os.remove(audio_path)
+        # Check if Azure Storage is configured
+        if settings.is_azure_storage_configured() and "blob.core.windows.net" in entry.audio_url:
+            from api.storage import get_storage_service
+            storage = get_storage_service()
+            storage.delete_audio(entry.audio_url)
+        else:
+            # Fall back to local file deletion
+            audio_path = os.path.join(settings.UPLOAD_DIR, os.path.basename(entry.audio_url))
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
     
     db.delete(entry)
     db.commit()
 
 
-def store_audio_file(audio_data: bytes, filename: str) -> str:
-    """Store audio file and return URL."""
+def store_audio_file(audio_data: bytes, filename: str, username: str = "anonymous") -> str:
+    """
+    Store audio file and return URL.
+    
+    Uses Azure Blob Storage if configured, otherwise falls back to local storage.
+    """
+    # Use Azure Blob Storage if configured
+    if settings.is_azure_storage_configured():
+        from api.storage import get_storage_service
+        storage = get_storage_service()
+        # Extract username from email (before @) for cleaner folder names
+        clean_username = username.split("@")[0] if "@" in username else username
+        return storage.upload_audio(audio_data, clean_username, filename)
+    
+    # Fall back to local storage
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     
     # Generate unique filename

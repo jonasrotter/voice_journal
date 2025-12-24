@@ -10,7 +10,9 @@ import json
 import logging
 from typing import Optional, Tuple
 
-from api.config import settings
+from api.config import get_settings
+
+settings = get_settings()
 
 logger = logging.getLogger(__name__)
 
@@ -25,23 +27,53 @@ class AzureOpenAIService:
     
     def _initialize_client(self):
         """Initialize the Azure OpenAI client lazily."""
-        if not settings.is_azure_ai_configured():
-            logger.warning("Azure OpenAI not configured. AI features will use mock data.")
+        if not settings.AZURE_OPENAI_ENDPOINT:
+            logger.warning("Azure OpenAI endpoint not configured. AI features will use mock data.")
             return
         
         try:
-            from openai import AzureOpenAI
-            
-            self._client = AzureOpenAI(
-                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-                api_key=settings.AZURE_OPENAI_API_KEY,
-                api_version=settings.AZURE_OPENAI_API_VERSION
-            )
-            logger.info("Azure OpenAI client initialized successfully")
+            # Always use DefaultAzureCredential as primary auth method
+            # This supports both local dev (Azure CLI) and production (managed identity)
+            self._init_with_default_credential()
+            if self._client:
+                return
+                
+            # Fallback to API key if DefaultAzureCredential fails and key is available
+            if settings.AZURE_OPENAI_API_KEY:
+                from openai import AzureOpenAI
+                self._client = AzureOpenAI(
+                    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                    api_key=settings.AZURE_OPENAI_API_KEY,
+                    api_version=settings.AZURE_OPENAI_API_VERSION
+                )
+                logger.info("Azure OpenAI client initialized with API key (fallback)")
+                
         except ImportError:
             logger.error("openai package not installed. Run: pip install openai")
         except Exception as e:
             logger.error(f"Failed to initialize Azure OpenAI client: {e}")
+    
+    def _init_with_default_credential(self):
+        """Initialize client with DefaultAzureCredential (Entra ID / managed identity)."""
+        try:
+            from openai import AzureOpenAI
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+            
+            credential = DefaultAzureCredential()
+            token_provider = get_bearer_token_provider(
+                credential, 
+                "https://cognitiveservices.azure.com/.default"
+            )
+            
+            self._client = AzureOpenAI(
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                azure_ad_token_provider=token_provider,
+                api_version=settings.AZURE_OPENAI_API_VERSION
+            )
+            logger.info("Azure OpenAI client initialized with DefaultAzureCredential")
+        except Exception as e:
+            logger.error(f"Failed to initialize Azure OpenAI with DefaultAzureCredential: {e}")
+            self._client = None
     
     @property
     def is_available(self) -> bool:
