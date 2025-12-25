@@ -1,136 +1,126 @@
 # Voice Journal API
 
-A FastAPI backend for voice journaling with AI-powered transcription, summarization, and emotion analysis.
+FastAPI backend for voice journaling with Azure OpenAI transcription, summarization, and emotion analysis.
 
-## Features
-
-- **Voice Recording**: Upload audio files for transcription
-- **AI Transcription**: Convert speech to text using Azure OpenAI Whisper or Azure Speech Services
-- **AI Analysis**: Generate summaries and detect emotions using Azure OpenAI GPT-4o
-- **Secure Storage**: JWT authentication and per-user data isolation
-- **RESTful API**: Full CRUD operations for journal entries
-
-## Requirements
-
-- Python 3.10+
-- PostgreSQL (or SQLite for development)
-
-## Installation
+## Quick Start
 
 ```bash
-# Create virtual environment
+# Setup
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-.\venv\Scripts\activate   # Windows
-
-# Install dependencies
+.\venv\Scripts\Activate.ps1   # Windows
+source venv/bin/activate      # Linux/Mac
 pip install -r requirements.txt
-```
 
-## Configuration
+# Configure
+cp .env.example .env          # Edit with your values
 
-Copy `.env.example` to `.env` and configure:
-
-```bash
-cp .env.example .env
-```
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `SECRET_KEY` | JWT signing key | Yes |
-| `UPLOAD_DIR` | Directory for audio files | Yes |
-| `AI_PROCESSING_MODE` | `mock`, `azure_openai`, or `azure_speech` | Yes |
-
-### Azure AI Configuration (for `azure_openai` mode)
-
-| Variable | Description |
-|----------|-------------|
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL |
-| `AZURE_OPENAI_API_KEY` | API key |
-| `AZURE_OPENAI_API_VERSION` | API version (default: 2024-12-01-preview) |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` | GPT-4o deployment name |
-| `AZURE_OPENAI_WHISPER_DEPLOYMENT_NAME` | Whisper deployment name |
-
-### Azure Speech Configuration (for `azure_speech` mode)
-
-| Variable | Description |
-|----------|-------------|
-| `AZURE_SPEECH_KEY` | Azure Speech service key |
-| `AZURE_SPEECH_REGION` | Azure region (e.g., swedencentral) |
-
-## AI Processing Modes
-
-The API supports three processing modes:
-
-1. **mock** (default): Uses mock data for development. No Azure credentials required.
-2. **azure_openai**: Uses Azure OpenAI for all processing:
-   - Whisper for transcription
-   - GPT-4o for summarization and emotion analysis
-3. **azure_speech**: Hybrid mode:
-   - Azure Speech Services for transcription
-   - Azure OpenAI GPT-4o for analysis
-
-## Running
-
-```bash
-# Development
+# Run
 uvicorn api.main:app --reload --port 8000
-
-# Production
-uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-## API Documentation
-
-- Swagger UI: http://localhost:8000/api/docs
-- ReDoc: http://localhost:8000/api/redoc
-
-## Endpoints
-
-### Auth
-- `POST /api/v1/auth/register` - Register new user
-- `POST /api/v1/auth/login` - Login and get JWT token
-
-### Users
-- `GET /api/v1/users/me` - Get current user profile
-- `PATCH /api/v1/users/me` - Update current user
-- `DELETE /api/v1/users/me` - Delete account (GDPR)
-
-### Entries
-- `POST /api/v1/entries` - Upload audio and create entry
-- `GET /api/v1/entries` - List all entries (paginated)
-- `GET /api/v1/entries/{id}` - Get specific entry
-- `PATCH /api/v1/entries/{id}` - Update entry
-- `DELETE /api/v1/entries/{id}` - Delete entry
-- `POST /api/v1/entries/{id}/reprocess` - Rerun AI analysis
-
-## Testing
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_ai_services.py -v
-
-# Run with coverage
-pytest tests/ --cov=api --cov-report=html
-```
+**API Docs**: http://localhost:8000/api/docs
 
 ## Architecture
 
 ```
 api/
-├── ai/                 # AI processing modules
-│   ├── azure_services.py  # Azure OpenAI & Speech integration
+├── ai/                    # AI processing
+│   ├── azure_services.py  # Azure OpenAI (Whisper + GPT-4o)
 │   └── processing.py      # Background processing pipeline
-├── auth/               # Authentication (JWT, password hashing)
-├── db/                 # Database models and session
-├── entries/            # Journal entry CRUD
-├── users/              # User management
-├── config.py           # Configuration settings
-└── main.py             # FastAPI application
+├── auth/                  # JWT authentication
+├── db/                    # SQLAlchemy models & session
+├── entries/               # Journal entry CRUD
+├── storage/               # Azure Blob Storage service
+│   └── blob_service.py    # Audio file management
+├── users/                 # User management
+├── config.py              # Environment configuration
+├── main.py                # FastAPI application
+├── Dockerfile             # Container image
+└── requirements.txt       # Python dependencies
 ```
+
+## Configuration
+
+### Core Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | - |
+| `SECRET_KEY` | JWT signing key | Required |
+| `UPLOAD_DIR` | Local audio directory | `./uploads` |
+| `AI_PROCESSING_MODE` | `mock` or `azure_openai` | `mock` |
+
+### Database (Alternative to DATABASE_URL)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `POSTGRES_HOST` | PostgreSQL host | `localhost` |
+| `POSTGRES_PORT` | PostgreSQL port | `5432` |
+| `POSTGRES_DATABASE` | Database name | `voice_journal` |
+| `POSTGRES_USER` | Database user | `postgres` |
+| `POSTGRES_PASSWORD` | Database password | - |
+
+### Azure OpenAI
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AZURE_OPENAI_ENDPOINT` | Endpoint URL | - |
+| `AZURE_OPENAI_API_KEY` | API key (optional with MI) | - |
+| `AZURE_OPENAI_WHISPER_DEPLOYMENT_NAME` | Whisper deployment | - |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` | GPT deployment | `gpt-4o` |
+| `AZURE_OPENAI_API_VERSION` | API version | `2024-12-01-preview` |
+
+### Azure Blob Storage
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AZURE_STORAGE_ACCOUNT_NAME` | Storage account | - |
+| `AZURE_STORAGE_ACCOUNT_KEY` | Access key (optional with MI) | - |
+| `AZURE_STORAGE_CONTAINER_NAME` | Container name | `audio-files` |
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/auth/register` | Register user |
+| POST | `/api/v1/auth/login` | Login → JWT token |
+| GET | `/api/v1/users/me` | Get profile |
+| PATCH | `/api/v1/users/me` | Update profile |
+| DELETE | `/api/v1/users/me` | Delete account |
+| POST | `/api/v1/entries` | Upload audio |
+| GET | `/api/v1/entries` | List entries |
+| GET | `/api/v1/entries/{id}` | Get entry |
+| DELETE | `/api/v1/entries/{id}` | Delete entry |
+| POST | `/api/v1/entries/{id}/reprocess` | Retry AI processing |
+| GET | `/api/health` | Health check |
+
+## Docker
+
+```bash
+# Build
+docker build -t voice-journal-api .
+
+# Run
+docker run -p 8000:8000 --env-file .env voice-journal-api
+```
+
+## Testing
+
+```bash
+pytest tests/ -v                          # All tests
+pytest tests/ --cov=api --cov-report=html # With coverage
+```
+
+## AI Processing Modes
+
+| Mode | Transcription | Analysis | Use Case |
+|------|---------------|----------|----------|
+| `mock` | Placeholder | Placeholder | Local development |
+| `azure_openai` | Whisper | GPT-4o | Production |
+
+## Authentication
+
+- **Local**: API key or Azure CLI credentials
+- **Azure**: Managed Identity (DefaultAzureCredential)
+
+Both Azure OpenAI and Blob Storage support passwordless auth via Managed Identity.
