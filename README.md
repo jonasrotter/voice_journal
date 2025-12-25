@@ -92,6 +92,26 @@ pytest tests/ -v                          # Run tests
 pytest tests/ --cov=api --cov-report=html # With coverage
 ```
 
+## Features
+
+- ✅ User registration and authentication
+- ✅ JWT-based session management
+- ✅ Audio recording with Web Audio API
+- ✅ Audio upload to Azure Blob Storage
+- ✅ AI transcription with Azure OpenAI Whisper
+- ✅ AI summarization with GPT-4o
+- ✅ Emotion detection with GPT-4o
+- ✅ Entry listing with pagination
+- ✅ Audio playback
+- ✅ Entry deletion
+- ✅ Reprocess failed entries
+- ✅ Privacy settings (AI opt-out)
+- ✅ Responsive design
+- ✅ Docker containerization
+- ✅ Azure Container Apps deployment
+- ✅ Infrastructure as Code (Bicep)
+- ✅ Managed Identity authentication
+
 ## License
 
 MIT - See [LICENSE](LICENSE)
