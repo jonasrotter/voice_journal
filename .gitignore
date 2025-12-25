@@ -1,5 +1,9 @@
-#Ignore all images
+#Ignore all media files
 *.jpg
+*.pnp
+*.wav
+*.mp3
+*.mp4
 
 #Ignore Environment files
 *.env
