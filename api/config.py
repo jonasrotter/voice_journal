@@ -32,13 +32,6 @@ class Settings:
         self.AZURE_OPENAI_CHAT_DEPLOYMENT: str = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME", "gpt-4o")
         self.AZURE_OPENAI_WHISPER_DEPLOYMENT: Optional[str] = os.getenv("AZURE_OPENAI_WHISPER_DEPLOYMENT_NAME")
         
-        # Azure Speech Configuration (alternative to Whisper)
-        self.AZURE_SPEECH_KEY: Optional[str] = os.getenv("AZURE_SPEECH_KEY")
-        self.AZURE_SPEECH_REGION: str = os.getenv("AZURE_SPEECH_REGION", "swedencentral")
-        
-        # AI Processing Mode: "azure_openai", "azure_speech", or "mock"
-        self.AI_PROCESSING_MODE: str = os.getenv("AI_PROCESSING_MODE", "mock")
-        
         # CORS
         self.ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
     
