@@ -57,6 +57,16 @@ param workerContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-hellowor
 param postgresAdminPassword = 'ChangeMe123!' // TODO: Use secure parameter in production
 
 // ============================================================================
+// Network Configuration
+// ============================================================================
+// Enable private endpoints for secure connectivity
+// When enabled, all backend services (Storage, PostgreSQL, OpenAI) will be
+// accessible only through private endpoints in a VNet.
+// NOTE: This requires recreating the Container App Environment.
+
+param enablePrivateEndpoints = false // Set to true for private endpoint connectivity
+
+// ============================================================================
 // Resource Tags
 // ============================================================================
 

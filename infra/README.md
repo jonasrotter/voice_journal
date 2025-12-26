@@ -48,6 +48,8 @@ Azure Bicep infrastructure-as-code for the Voice Journal application.
 | `ai.bicep` | Azure OpenAI service and model deployments |
 | `queues.bicep` | Service Bus namespace and queues |
 | `containerapps.bicep` | Container Apps Environment and apps |
+| `network.bicep` | VNet and subnets (for private endpoints) |
+| `privateendpoints.bicep` | Private endpoints and DNS zones |
 | `outputs.bicep` | Consolidated deployment outputs |
 | `deploy.ps1` | PowerShell deployment script (Windows) |
 | `deploy.sh` | Bash deployment script (Linux/macOS) |
@@ -209,7 +211,61 @@ az deployment group create \
 - **Key Vault**: Centralized secrets management
 - **RBAC**: Least-privilege access control
 - **PostgreSQL SSL**: Encrypted connections required
-- **Private Networking**: Can be enabled for production
+- **Private Endpoints**: Optional secure connectivity for production
+
+## Private Endpoint Connectivity
+
+For production environments, you can enable private endpoint connectivity to ensure all backend services (Storage, PostgreSQL, OpenAI) are only accessible through a private VNet.
+
+### Architecture with Private Endpoints
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        VNet: vnet-voicejournal-{env}                │
+│                           10.0.0.0/16                               │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │  Subnet: snet-container-apps (10.0.0.0/23)                     │ │
+│  │  ┌─────────────────────────────────────────────────────────┐   │ │
+│  │  │  Container App Environment (VNet integrated)            │   │ │
+│  │  │  ┌─────────┐  ┌─────────┐  ┌──────────┐                 │   │ │
+│  │  │  │   API   │  │   UI    │  │  Worker  │                 │   │ │
+│  │  │  └─────────┘  └─────────┘  └──────────┘                 │   │ │
+│  │  └─────────────────────────────────────────────────────────┘   │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │  Subnet: snet-private-endpoints (10.0.2.0/24)                  │ │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │ │
+│  │  │ PE-Storage  │  │ PE-Postgres │  │     PE-OpenAI           │ │ │
+│  │  │ (blob)      │  │             │  │                         │ │ │
+│  │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Enabling Private Endpoints
+
+1. **Set the parameter** in `main.bicepparam`:
+   ```bicep-params
+   param enablePrivateEndpoints = true
+   ```
+
+2. **Deploy** the infrastructure:
+   ```bash
+   az deployment group create \
+     --resource-group rg-voicejournal-prod \
+     --template-file main.bicep \
+     --parameters main.bicepparam \
+     --parameters enablePrivateEndpoints=true
+   ```
+
+### Important Notes
+
+⚠️ **Breaking Change**: Enabling private endpoints requires recreating the Container App Environment. This means:
+- Container Apps will get **new URLs**
+- You'll need to update any external integrations pointing to the old URLs
+
+### Cost Impact
+- Private Endpoints: ~$7.30/month per endpoint × 3 = ~$22/month additional
 
 ## Scaling
 

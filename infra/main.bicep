@@ -42,6 +42,9 @@ param workerContainerImage string = 'mcr.microsoft.com/azuredocs/containerapps-h
 @secure()
 param postgresAdminPassword string
 
+@description('Enable private endpoint connectivity (disables public access to backend services)')
+param enablePrivateEndpoints bool = false
+
 @description('Tags to apply to all resources')
 param tags object = {
   application: 'voice-journal'
@@ -55,6 +58,19 @@ param tags object = {
 
 var resourcePrefix = '${baseName}-${environment}'
 var resourcePrefixNoDash = replace(resourcePrefix, '-', '')
+
+// ============================================================================
+// Module: Network (VNet & Subnets) - Only when private endpoints enabled
+// ============================================================================
+
+module network 'network.bicep' = if (enablePrivateEndpoints) {
+  name: 'network-deployment'
+  params: {
+    location: location
+    resourcePrefix: resourcePrefix
+    tags: tags
+  }
+}
 
 // ============================================================================
 // Module: Security (Key Vault & Managed Identities)
@@ -85,6 +101,7 @@ module data 'data.bicep' = {
     apiIdentityPrincipalId: security.outputs.apiIdentityPrincipalId
     workerIdentityPrincipalId: security.outputs.workerIdentityPrincipalId
     postgresAdminPassword: postgresAdminPassword
+    enablePrivateEndpoints: enablePrivateEndpoints
   }
 }
 
@@ -102,6 +119,8 @@ module ai 'ai.bicep' = {
     chatModelName: openAiChatModelName
     whisperModelName: openAiWhisperModelName
     workerIdentityPrincipalId: security.outputs.workerIdentityPrincipalId
+    apiIdentityPrincipalId: security.outputs.apiIdentityPrincipalId
+    enablePrivateEndpoints: enablePrivateEndpoints
   }
 }
 
@@ -134,8 +153,10 @@ module containerApps 'containerapps.bicep' = {
     uiContainerImage: uiContainerImage
     workerContainerImage: workerContainerImage
     apiIdentityId: security.outputs.apiIdentityId
+    apiIdentityClientId: security.outputs.apiIdentityClientId
     uiIdentityId: security.outputs.uiIdentityId
     workerIdentityId: security.outputs.workerIdentityId
+    workerIdentityClientId: security.outputs.workerIdentityClientId
     keyVaultName: security.outputs.keyVaultName
     postgresHost: data.outputs.postgresHost
     postgresDatabaseName: data.outputs.postgresDatabaseName
@@ -147,7 +168,35 @@ module containerApps 'containerapps.bicep' = {
     openAiWhisperDeploymentName: ai.outputs.whisperDeploymentName
     serviceBusNamespace: queues.outputs.serviceBusNamespace
     serviceBusQueueName: queues.outputs.queueName
+    enableVnetIntegration: enablePrivateEndpoints
+    containerAppsSubnetId: enablePrivateEndpoints ? network.outputs.containerAppsSubnetId : ''
   }
+  dependsOn: enablePrivateEndpoints ? [network] : []
+}
+
+// ============================================================================
+// Module: Private Endpoints (only when enabled)
+// ============================================================================
+
+module privateEndpoints 'privateendpoints.bicep' = if (enablePrivateEndpoints) {
+  name: 'privateendpoints-deployment'
+  params: {
+    location: location
+    resourcePrefix: resourcePrefix
+    tags: tags
+    vnetId: network.outputs.vnetId
+    vnetName: network.outputs.vnetName
+    privateEndpointsSubnetId: network.outputs.privateEndpointsSubnetId
+    storageAccountId: data.outputs.storageAccountId
+    storageAccountName: data.outputs.storageAccountName
+    postgresServerId: data.outputs.postgresServerId
+    postgresServerName: data.outputs.postgresServerName
+    openAiId: ai.outputs.openAiId
+    openAiName: ai.outputs.openAiAccountName
+  }
+  dependsOn: [
+    containerApps // Deploy after Container Apps to ensure DNS resolution works
+  ]
 }
 
 // ============================================================================

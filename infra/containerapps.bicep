@@ -33,11 +33,17 @@ param workerContainerImage string
 @description('Resource ID of the API managed identity')
 param apiIdentityId string
 
+@description('Client ID of the API managed identity')
+param apiIdentityClientId string
+
 @description('Resource ID of the UI managed identity')
 param uiIdentityId string
 
 @description('Resource ID of the Worker managed identity')
 param workerIdentityId string
+
+@description('Client ID of the Worker managed identity')
+param workerIdentityClientId string
 
 @description('Name of the Key Vault')
 param keyVaultName string
@@ -71,6 +77,12 @@ param serviceBusNamespace string
 
 @description('Service Bus queue name')
 param serviceBusQueueName string
+
+@description('Enable VNet integration for private endpoint connectivity')
+param enableVnetIntegration bool = false
+
+@description('Subnet ID for Container Apps (required when enableVnetIntegration is true)')
+param containerAppsSubnetId string = ''
 
 // ============================================================================
 // Variables
@@ -121,6 +133,10 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: logAnalytics.listKeys().primarySharedKey
       }
     }
+    vnetConfiguration: enableVnetIntegration ? {
+      infrastructureSubnetId: containerAppsSubnetId
+      internal: false // Allow external ingress
+    } : null
     zoneRedundant: false
     workloadProfiles: [
       {
@@ -177,7 +193,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             {
               name: 'AZURE_CLIENT_ID'
-              value: split(apiIdentityId, '/')[8] // Extract identity name
+              value: apiIdentityClientId
             }
             {
               name: 'POSTGRES_HOST'
@@ -190,6 +206,10 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'POSTGRES_USER'
               value: postgresAdminLogin
+            }
+            {
+              name: 'AZURE_STORAGE_ACCOUNT_NAME'
+              value: storageAccountName
             }
             {
               name: 'STORAGE_ACCOUNT_NAME'
@@ -214,6 +234,18 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'AI_PROCESSING_MODE'
               value: 'azure_openai'
+            }
+            {
+              name: 'AZURE_OPENAI_ENDPOINT'
+              value: openAiEndpoint
+            }
+            {
+              name: 'AZURE_OPENAI_CHAT_DEPLOYMENT_NAME'
+              value: openAiChatDeploymentName
+            }
+            {
+              name: 'AZURE_OPENAI_WHISPER_DEPLOYMENT_NAME'
+              value: openAiWhisperDeploymentName
             }
           ]
           probes: [
@@ -298,6 +330,14 @@ resource uiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'VITE_API_URL'
               value: 'https://${apiAppName}.${containerAppsEnv.properties.defaultDomain}'
             }
+            {
+              name: 'API_URL'
+              value: 'https://${apiAppName}.${containerAppsEnv.properties.defaultDomain}'
+            }
+            {
+              name: 'API_HOST'
+              value: '${apiAppName}.${containerAppsEnv.properties.defaultDomain}'
+            }
           ]
         }
       ]
@@ -357,7 +397,7 @@ resource workerContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             {
               name: 'AZURE_CLIENT_ID'
-              value: split(workerIdentityId, '/')[8]
+              value: workerIdentityClientId
             }
             {
               name: 'POSTGRES_HOST'

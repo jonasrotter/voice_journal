@@ -55,6 +55,9 @@ param postgresSkuTier string = 'Burstable'
 @maxValue(16384)
 param postgresStorageSizeGB int = 32
 
+@description('Enable private endpoint connectivity (disables public access)')
+param enablePrivateEndpoints bool = false
+
 // ============================================================================
 // Variables
 // ============================================================================
@@ -97,7 +100,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' =
       mode: 'Disabled'
     }
     network: {
-      publicNetworkAccess: 'Enabled'
+      publicNetworkAccess: enablePrivateEndpoints ? 'Disabled' : 'Enabled'
     }
     authConfig: {
       activeDirectoryAuth: 'Disabled'
@@ -124,8 +127,8 @@ resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2
 // PostgreSQL Firewall Rules
 // ============================================================================
 
-@description('Allow Azure services to access PostgreSQL')
-resource postgresFirewallAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
+@description('Allow Azure services to access PostgreSQL (only when not using private endpoints)')
+resource postgresFirewallAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = if (!enablePrivateEndpoints) {
   parent: postgresServer
   name: 'AllowAzureServices'
   properties: {
@@ -150,11 +153,12 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   properties: {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
-    allowSharedKeyAccess: true
+    allowSharedKeyAccess: !enablePrivateEndpoints
+    publicNetworkAccess: enablePrivateEndpoints ? 'Disabled' : 'Enabled'
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
     networkAcls: {
-      defaultAction: 'Allow'
+      defaultAction: enablePrivateEndpoints ? 'Deny' : 'Allow'
       bypass: 'AzureServices'
     }
   }
@@ -279,3 +283,9 @@ output storageBlobEndpoint string = storageAccount.properties.primaryEndpoints.b
 
 @description('Audio blob container name')
 output audioBlobContainerName string = audioBlobContainerName
+
+@description('PostgreSQL server resource ID')
+output postgresServerId string = postgresServer.id
+
+@description('Storage account resource ID')
+output storageAccountId string = storageAccount.id

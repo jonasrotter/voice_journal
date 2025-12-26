@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "4319126516617790402"
+      "templateHash": "14483501337651981772"
     }
   },
   "parameters": {
@@ -78,6 +78,13 @@
         "description": "PostgreSQL administrator password"
       }
     },
+    "enablePrivateEndpoints": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable private endpoint connectivity (disables public access to backend services)"
+      }
+    },
     "tags": {
       "type": "object",
       "defaultValue": {
@@ -95,6 +102,240 @@
     "resourcePrefixNoDash": "[replace(variables('resourcePrefix'), '-', '')]"
   },
   "resources": [
+    {
+      "condition": "[parameters('enablePrivateEndpoints')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "network-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourcePrefix": {
+            "value": "[variables('resourcePrefix')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "6092389764798066839"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for resources"
+              }
+            },
+            "resourcePrefix": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource naming prefix"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags to apply to resources"
+              }
+            },
+            "vnetAddressPrefix": {
+              "type": "string",
+              "defaultValue": "10.0.0.0/16",
+              "metadata": {
+                "description": "VNet address space"
+              }
+            },
+            "containerAppsSubnetPrefix": {
+              "type": "string",
+              "defaultValue": "10.0.0.0/23",
+              "metadata": {
+                "description": "Container Apps subnet address prefix (minimum /23 required)"
+              }
+            },
+            "privateEndpointsSubnetPrefix": {
+              "type": "string",
+              "defaultValue": "10.0.2.0/24",
+              "metadata": {
+                "description": "Private endpoints subnet address prefix"
+              }
+            }
+          },
+          "variables": {
+            "vnetName": "[format('vnet-{0}', parameters('resourcePrefix'))]",
+            "containerAppsSubnetName": "snet-container-apps",
+            "privateEndpointsSubnetName": "snet-private-endpoints",
+            "containerAppsNsgName": "[format('nsg-{0}-container-apps', parameters('resourcePrefix'))]",
+            "privateEndpointsNsgName": "[format('nsg-{0}-private-endpoints', parameters('resourcePrefix'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2024-01-01",
+              "name": "[variables('containerAppsNsgName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "AllowHTTPS",
+                    "properties": {
+                      "priority": 100,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourceAddressPrefix": "*",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "443"
+                    }
+                  },
+                  {
+                    "name": "AllowHTTP",
+                    "properties": {
+                      "priority": 110,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourceAddressPrefix": "*",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "80"
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "description": "NSG for Container Apps subnet"
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2024-01-01",
+              "name": "[variables('privateEndpointsNsgName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "securityRules": []
+              },
+              "metadata": {
+                "description": "NSG for Private Endpoints subnet"
+              }
+            },
+            {
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2024-01-01",
+              "name": "[variables('vnetName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "addressSpace": {
+                  "addressPrefixes": [
+                    "[parameters('vnetAddressPrefix')]"
+                  ]
+                },
+                "subnets": [
+                  {
+                    "name": "[variables('containerAppsSubnetName')]",
+                    "properties": {
+                      "addressPrefix": "[parameters('containerAppsSubnetPrefix')]",
+                      "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('containerAppsNsgName'))]"
+                      },
+                      "delegations": [
+                        {
+                          "name": "Microsoft.App.environments",
+                          "properties": {
+                            "serviceName": "Microsoft.App/environments"
+                          }
+                        }
+                      ],
+                      "privateEndpointNetworkPolicies": "Disabled",
+                      "privateLinkServiceNetworkPolicies": "Enabled"
+                    }
+                  },
+                  {
+                    "name": "[variables('privateEndpointsSubnetName')]",
+                    "properties": {
+                      "addressPrefix": "[parameters('privateEndpointsSubnetPrefix')]",
+                      "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('privateEndpointsNsgName'))]"
+                      },
+                      "privateEndpointNetworkPolicies": "Disabled",
+                      "privateLinkServiceNetworkPolicies": "Enabled"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('containerAppsNsgName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('privateEndpointsNsgName'))]"
+              ],
+              "metadata": {
+                "description": "Virtual Network for Voice Journal application"
+              }
+            }
+          ],
+          "outputs": {
+            "vnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual Network resource ID"
+              },
+              "value": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+            },
+            "vnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual Network name"
+              },
+              "value": "[variables('vnetName')]"
+            },
+            "containerAppsSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Apps subnet resource ID"
+              },
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2024-01-01').subnets[0].id]"
+            },
+            "containerAppsSubnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Apps subnet name"
+              },
+              "value": "[variables('containerAppsSubnetName')]"
+            },
+            "privateEndpointsSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Private Endpoints subnet resource ID"
+              },
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2024-01-01').subnets[1].id]"
+            },
+            "privateEndpointsSubnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Private Endpoints subnet name"
+              },
+              "value": "[variables('privateEndpointsSubnetName')]"
+            }
+          }
+        }
+      }
+    },
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -122,7 +363,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "9297022426080113799"
+              "templateHash": "3811489462389887556"
             }
           },
           "parameters": {
@@ -194,8 +435,8 @@
                 "tenantId": "[subscription().tenantId]",
                 "enableRbacAuthorization": true,
                 "enableSoftDelete": true,
-                "softDeleteRetentionInDays": 7,
-                "enablePurgeProtection": false,
+                "softDeleteRetentionInDays": 90,
+                "enablePurgeProtection": true,
                 "publicNetworkAccess": "Enabled",
                 "networkAcls": {
                   "defaultAction": "Allow",
@@ -351,6 +592,9 @@
           },
           "postgresAdminPassword": {
             "value": "[parameters('postgresAdminPassword')]"
+          },
+          "enablePrivateEndpoints": {
+            "value": "[parameters('enablePrivateEndpoints')]"
           }
         },
         "template": {
@@ -360,7 +604,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "324203430899196558"
+              "templateHash": "16171027044137844764"
             }
           },
           "parameters": {
@@ -461,6 +705,13 @@
               "metadata": {
                 "description": "PostgreSQL storage size in GB"
               }
+            },
+            "enablePrivateEndpoints": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable private endpoint connectivity (disables public access)"
+              }
             }
           },
           "variables": {
@@ -497,7 +748,7 @@
                   "mode": "Disabled"
                 },
                 "network": {
-                  "publicNetworkAccess": "Enabled"
+                  "publicNetworkAccess": "[if(parameters('enablePrivateEndpoints'), 'Disabled', 'Enabled')]"
                 },
                 "authConfig": {
                   "activeDirectoryAuth": "Disabled",
@@ -524,6 +775,7 @@
               }
             },
             {
+              "condition": "[not(parameters('enablePrivateEndpoints'))]",
               "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
               "apiVersion": "2024-08-01",
               "name": "[format('{0}/{1}', variables('postgresServerName'), 'AllowAzureServices')]",
@@ -535,7 +787,7 @@
                 "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
               ],
               "metadata": {
-                "description": "Allow Azure services to access PostgreSQL"
+                "description": "Allow Azure services to access PostgreSQL (only when not using private endpoints)"
               }
             },
             {
@@ -551,11 +803,12 @@
               "properties": {
                 "accessTier": "Hot",
                 "allowBlobPublicAccess": false,
-                "allowSharedKeyAccess": true,
+                "allowSharedKeyAccess": "[not(parameters('enablePrivateEndpoints'))]",
+                "publicNetworkAccess": "[if(parameters('enablePrivateEndpoints'), 'Disabled', 'Enabled')]",
                 "minimumTlsVersion": "TLS1_2",
                 "supportsHttpsTrafficOnly": true,
                 "networkAcls": {
-                  "defaultAction": "Allow",
+                  "defaultAction": "[if(parameters('enablePrivateEndpoints'), 'Deny', 'Allow')]",
                   "bypass": "AzureServices"
                 }
               },
@@ -731,6 +984,20 @@
                 "description": "Audio blob container name"
               },
               "value": "[variables('audioBlobContainerName')]"
+            },
+            "postgresServerId": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL server resource ID"
+              },
+              "value": "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+            },
+            "storageAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage account resource ID"
+              },
+              "value": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             }
           }
         }
@@ -769,6 +1036,12 @@
           },
           "workerIdentityPrincipalId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.workerIdentityPrincipalId.value]"
+          },
+          "apiIdentityPrincipalId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.apiIdentityPrincipalId.value]"
+          },
+          "enablePrivateEndpoints": {
+            "value": "[parameters('enablePrivateEndpoints')]"
           }
         },
         "template": {
@@ -778,7 +1051,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "16883931657505538602"
+              "templateHash": "6102207896011599851"
             }
           },
           "parameters": {
@@ -825,6 +1098,19 @@
               "metadata": {
                 "description": "Principal ID of the Worker managed identity"
               }
+            },
+            "apiIdentityPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the API managed identity"
+              }
+            },
+            "enablePrivateEndpoints": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable private endpoint connectivity (disables public access)"
+              }
             }
           },
           "variables": {
@@ -844,9 +1130,9 @@
               },
               "properties": {
                 "customSubDomainName": "[variables('openAiAccountName')]",
-                "publicNetworkAccess": "Enabled",
+                "publicNetworkAccess": "[if(parameters('enablePrivateEndpoints'), 'Disabled', 'Enabled')]",
                 "networkAcls": {
-                  "defaultAction": "Allow"
+                  "defaultAction": "[if(parameters('enablePrivateEndpoints'), 'Deny', 'Allow')]"
                 },
                 "disableLocalAuth": false
               },
@@ -907,7 +1193,7 @@
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "scope": "[format('Microsoft.CognitiveServices/accounts/{0}', variables('openAiAccountName'))]",
-              "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', variables('openAiAccountName')), parameters('workerIdentityPrincipalId'), variables('cognitiveServicesOpenAIUserRoleId'))]",
+              "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', variables('openAiAccountName')), parameters('workerIdentityPrincipalId'), variables('cognitiveServicesOpenAIUserRoleId'), 'worker')]",
               "properties": {
                 "principalId": "[parameters('workerIdentityPrincipalId')]",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('cognitiveServicesOpenAIUserRoleId'))]",
@@ -918,6 +1204,23 @@
               ],
               "metadata": {
                 "description": "Worker identity has Cognitive Services OpenAI User access"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.CognitiveServices/accounts/{0}', variables('openAiAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', variables('openAiAccountName')), parameters('apiIdentityPrincipalId'), variables('cognitiveServicesOpenAIUserRoleId'), 'api')]",
+              "properties": {
+                "principalId": "[parameters('apiIdentityPrincipalId')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('cognitiveServicesOpenAIUserRoleId'))]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts', variables('openAiAccountName'))]"
+              ],
+              "metadata": {
+                "description": "API identity has Cognitive Services OpenAI User access"
               }
             },
             {
@@ -977,6 +1280,13 @@
                 "description": "Whisper deployment name"
               },
               "value": "[parameters('whisperModelName')]"
+            },
+            "openAiId": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure OpenAI resource ID"
+              },
+              "value": "[resourceId('Microsoft.CognitiveServices/accounts', variables('openAiAccountName'))]"
             }
           }
         }
@@ -1206,11 +1516,17 @@
           "apiIdentityId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.apiIdentityId.value]"
           },
+          "apiIdentityClientId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.apiIdentityClientId.value]"
+          },
           "uiIdentityId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.uiIdentityId.value]"
           },
           "workerIdentityId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.workerIdentityId.value]"
+          },
+          "workerIdentityClientId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.workerIdentityClientId.value]"
           },
           "keyVaultName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'security-deployment'), '2025-04-01').outputs.keyVaultName.value]"
@@ -1244,7 +1560,11 @@
           },
           "serviceBusQueueName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'queues-deployment'), '2025-04-01').outputs.queueName.value]"
-          }
+          },
+          "enableVnetIntegration": {
+            "value": "[parameters('enablePrivateEndpoints')]"
+          },
+          "containerAppsSubnetId": "[if(parameters('enablePrivateEndpoints'), createObject('value', reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.containerAppsSubnetId.value), createObject('value', ''))]"
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -1253,7 +1573,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "15860198464989488357"
+              "templateHash": "11589696232370308828"
             }
           },
           "parameters": {
@@ -1299,6 +1619,12 @@
                 "description": "Resource ID of the API managed identity"
               }
             },
+            "apiIdentityClientId": {
+              "type": "string",
+              "metadata": {
+                "description": "Client ID of the API managed identity"
+              }
+            },
             "uiIdentityId": {
               "type": "string",
               "metadata": {
@@ -1309,6 +1635,12 @@
               "type": "string",
               "metadata": {
                 "description": "Resource ID of the Worker managed identity"
+              }
+            },
+            "workerIdentityClientId": {
+              "type": "string",
+              "metadata": {
+                "description": "Client ID of the Worker managed identity"
               }
             },
             "keyVaultName": {
@@ -1376,6 +1708,20 @@
               "metadata": {
                 "description": "Service Bus queue name"
               }
+            },
+            "enableVnetIntegration": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable VNet integration for private endpoint connectivity"
+              }
+            },
+            "containerAppsSubnetId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Subnet ID for Container Apps (required when enableVnetIntegration is true)"
+              }
             }
           },
           "variables": {
@@ -1421,6 +1767,7 @@
                     "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2023-09-01').primarySharedKey]"
                   }
                 },
+                "vnetConfiguration": "[if(parameters('enableVnetIntegration'), createObject('infrastructureSubnetId', parameters('containerAppsSubnetId'), 'internal', false()), null())]",
                 "zoneRedundant": false,
                 "workloadProfiles": [
                   {
@@ -1490,7 +1837,7 @@
                       "env": [
                         {
                           "name": "AZURE_CLIENT_ID",
-                          "value": "[split(parameters('apiIdentityId'), '/')[8]]"
+                          "value": "[parameters('apiIdentityClientId')]"
                         },
                         {
                           "name": "POSTGRES_HOST",
@@ -1671,7 +2018,7 @@
                       "env": [
                         {
                           "name": "AZURE_CLIENT_ID",
-                          "value": "[split(parameters('workerIdentityId'), '/')[8]]"
+                          "value": "[parameters('workerIdentityClientId')]"
                         },
                         {
                           "name": "POSTGRES_HOST",
@@ -1813,8 +2160,432 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'ai-deployment')]",
         "[resourceId('Microsoft.Resources/deployments', 'data-deployment')]",
+        "[resourceId('Microsoft.Resources/deployments', 'network-deployment')]",
         "[resourceId('Microsoft.Resources/deployments', 'queues-deployment')]",
         "[resourceId('Microsoft.Resources/deployments', 'security-deployment')]"
+      ]
+    },
+    {
+      "condition": "[parameters('enablePrivateEndpoints')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "privateendpoints-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourcePrefix": {
+            "value": "[variables('resourcePrefix')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "vnetId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.vnetId.value]"
+          },
+          "vnetName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.vnetName.value]"
+          },
+          "privateEndpointsSubnetId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.privateEndpointsSubnetId.value]"
+          },
+          "storageAccountId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.storageAccountId.value]"
+          },
+          "storageAccountName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.storageAccountName.value]"
+          },
+          "postgresServerId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresServerId.value]"
+          },
+          "postgresServerName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'data-deployment'), '2025-04-01').outputs.postgresServerName.value]"
+          },
+          "openAiId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'ai-deployment'), '2025-04-01').outputs.openAiId.value]"
+          },
+          "openAiName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'ai-deployment'), '2025-04-01').outputs.openAiAccountName.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "18067739061769991880"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for resources"
+              }
+            },
+            "resourcePrefix": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource naming prefix (reserved for future use)"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags to apply to resources"
+              }
+            },
+            "vnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual Network ID to link DNS zones"
+              }
+            },
+            "vnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual Network name for DNS zone links"
+              }
+            },
+            "privateEndpointsSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Subnet ID for private endpoints"
+              }
+            },
+            "storageAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage Account resource ID"
+              }
+            },
+            "storageAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage Account name"
+              }
+            },
+            "postgresServerId": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL Server resource ID"
+              }
+            },
+            "postgresServerName": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL Server name"
+              }
+            },
+            "openAiId": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure OpenAI resource ID"
+              }
+            },
+            "openAiName": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure OpenAI name"
+              }
+            }
+          },
+          "variables": {
+            "storageBlobDnsZoneName": "privatelink.blob.core.windows.net",
+            "postgresDnsZoneName": "privatelink.postgres.database.azure.com",
+            "openAiDnsZoneName": "privatelink.openai.azure.com"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "[variables('storageBlobDnsZoneName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "metadata": {
+                "description": "Private DNS Zone for Azure Blob Storage"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', variables('storageBlobDnsZoneName'), format('{0}-link', parameters('vnetName')))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[parameters('vnetId')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('storageBlobDnsZoneName'))]"
+              ],
+              "metadata": {
+                "description": "Link Storage Blob DNS Zone to VNet"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "[variables('postgresDnsZoneName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "metadata": {
+                "description": "Private DNS Zone for Azure PostgreSQL"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', variables('postgresDnsZoneName'), format('{0}-link', parameters('vnetName')))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[parameters('vnetId')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('postgresDnsZoneName'))]"
+              ],
+              "metadata": {
+                "description": "Link PostgreSQL DNS Zone to VNet"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "[variables('openAiDnsZoneName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "metadata": {
+                "description": "Private DNS Zone for Azure OpenAI"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', variables('openAiDnsZoneName'), format('{0}-link', parameters('vnetName')))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[parameters('vnetId')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('openAiDnsZoneName'))]"
+              ],
+              "metadata": {
+                "description": "Link Azure OpenAI DNS Zone to VNet"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2024-01-01",
+              "name": "[format('pe-{0}-blob', parameters('storageAccountName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('privateEndpointsSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "[format('pe-{0}-blob-connection', parameters('storageAccountName'))]",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('storageAccountId')]",
+                      "groupIds": [
+                        "blob"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "description": "Private Endpoint for Azure Blob Storage"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2024-01-01",
+              "name": "[format('{0}/{1}', format('pe-{0}-blob', parameters('storageAccountName')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "privatelink-blob-core-windows-net",
+                    "properties": {
+                      "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('storageBlobDnsZoneName'))]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('storageBlobDnsZoneName'))]",
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-{0}-blob', parameters('storageAccountName')))]"
+              ],
+              "metadata": {
+                "description": "DNS Zone Group for Storage Blob Private Endpoint"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2024-01-01",
+              "name": "[format('pe-{0}', parameters('postgresServerName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('privateEndpointsSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "[format('pe-{0}-connection', parameters('postgresServerName'))]",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('postgresServerId')]",
+                      "groupIds": [
+                        "postgresqlServer"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "description": "Private Endpoint for Azure PostgreSQL"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2024-01-01",
+              "name": "[format('{0}/{1}', format('pe-{0}', parameters('postgresServerName')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "privatelink-postgres-database-azure-com",
+                    "properties": {
+                      "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('postgresDnsZoneName'))]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('postgresDnsZoneName'))]",
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-{0}', parameters('postgresServerName')))]"
+              ],
+              "metadata": {
+                "description": "DNS Zone Group for PostgreSQL Private Endpoint"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2024-01-01",
+              "name": "[format('pe-{0}', parameters('openAiName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('privateEndpointsSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "[format('pe-{0}-connection', parameters('openAiName'))]",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('openAiId')]",
+                      "groupIds": [
+                        "account"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "description": "Private Endpoint for Azure OpenAI"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2024-01-01",
+              "name": "[format('{0}/{1}', format('pe-{0}', parameters('openAiName')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "privatelink-openai-azure-com",
+                    "properties": {
+                      "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('openAiDnsZoneName'))]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('openAiDnsZoneName'))]",
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-{0}', parameters('openAiName')))]"
+              ],
+              "metadata": {
+                "description": "DNS Zone Group for Azure OpenAI Private Endpoint"
+              }
+            }
+          ],
+          "outputs": {
+            "storageBlobDnsZoneId": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage Blob Private DNS Zone ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateDnsZones', variables('storageBlobDnsZoneName'))]"
+            },
+            "postgresDnsZoneId": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL Private DNS Zone ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateDnsZones', variables('postgresDnsZoneName'))]"
+            },
+            "openAiDnsZoneId": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure OpenAI Private DNS Zone ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateDnsZones', variables('openAiDnsZoneName'))]"
+            },
+            "storageBlobPrivateEndpointId": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage Blob Private Endpoint ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-{0}-blob', parameters('storageAccountName')))]"
+            },
+            "postgresPrivateEndpointId": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL Private Endpoint ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-{0}', parameters('postgresServerName')))]"
+            },
+            "openAiPrivateEndpointId": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure OpenAI Private Endpoint ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-{0}', parameters('openAiName')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'ai-deployment')]",
+        "[resourceId('Microsoft.Resources/deployments', 'containerapps-deployment')]",
+        "[resourceId('Microsoft.Resources/deployments', 'data-deployment')]",
+        "[resourceId('Microsoft.Resources/deployments', 'network-deployment')]"
       ]
     },
     {

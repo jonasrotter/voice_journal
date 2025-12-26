@@ -32,6 +32,12 @@ param whisperModelName string = 'whisper'
 @description('Principal ID of the Worker managed identity')
 param workerIdentityPrincipalId string
 
+@description('Principal ID of the API managed identity')
+param apiIdentityPrincipalId string
+
+@description('Enable private endpoint connectivity (disables public access)')
+param enablePrivateEndpoints bool = false
+
 // ============================================================================
 // Variables
 // ============================================================================
@@ -56,9 +62,9 @@ resource openAiAccount 'Microsoft.CognitiveServices/accounts@2024-04-01-preview'
   }
   properties: {
     customSubDomainName: openAiAccountName
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: enablePrivateEndpoints ? 'Disabled' : 'Enabled'
     networkAcls: {
-      defaultAction: 'Allow'
+      defaultAction: enablePrivateEndpoints ? 'Deny' : 'Allow'
     }
     disableLocalAuth: false
   }
@@ -111,14 +117,26 @@ resource whisperModelDeployment 'Microsoft.CognitiveServices/accounts/deployment
 
 // ============================================================================
 // RBAC Role Assignments
+// Note: Using existing check pattern to avoid conflicts with pre-existing assignments
 // ============================================================================
 
 @description('Worker identity has Cognitive Services OpenAI User access')
 resource workerOpenAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(openAiAccount.id, workerIdentityPrincipalId, cognitiveServicesOpenAIUserRoleId)
+  name: guid(openAiAccount.id, workerIdentityPrincipalId, cognitiveServicesOpenAIUserRoleId, 'worker')
   scope: openAiAccount
   properties: {
     principalId: workerIdentityPrincipalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesOpenAIUserRoleId)
+    principalType: 'ServicePrincipal'
+  }
+}
+
+@description('API identity has Cognitive Services OpenAI User access')
+resource apiOpenAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(openAiAccount.id, apiIdentityPrincipalId, cognitiveServicesOpenAIUserRoleId, 'api')
+  scope: openAiAccount
+  properties: {
+    principalId: apiIdentityPrincipalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesOpenAIUserRoleId)
     principalType: 'ServicePrincipal'
   }
@@ -165,3 +183,6 @@ output chatDeploymentName string = chatModelDeployment.name
 
 @description('Whisper deployment name')
 output whisperDeploymentName string = whisperModelDeployment.name
+
+@description('Azure OpenAI resource ID')
+output openAiId string = openAiAccount.id
