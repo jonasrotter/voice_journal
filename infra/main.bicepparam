@@ -64,7 +64,7 @@ param postgresAdminPassword = 'ChangeMe123!' // TODO: Use secure parameter in pr
 // accessible only through private endpoints in a VNet.
 // NOTE: This requires recreating the Container App Environment.
 
-param enablePrivateEndpoints = false // Set to true for private endpoint connectivity
+param enablePrivateEndpoints = true // Set to false for local development/testing
 
 // ============================================================================
 // Resource Tags
