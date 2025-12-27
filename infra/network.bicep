@@ -29,6 +29,9 @@ param containerAppsSubnetPrefix string = '10.0.0.0/23'
 @description('Private endpoints subnet address prefix')
 param privateEndpointsSubnetPrefix string = '10.0.2.0/24'
 
+@description('GitHub Codespaces subnet address prefix (for VNet integration)')
+param codespacesSubnetPrefix string = '10.0.3.0/24'
+
 // ============================================================================
 // Variables
 // ============================================================================
@@ -36,8 +39,10 @@ param privateEndpointsSubnetPrefix string = '10.0.2.0/24'
 var vnetName = 'vnet-${resourcePrefix}'
 var containerAppsSubnetName = 'snet-container-apps'
 var privateEndpointsSubnetName = 'snet-private-endpoints'
+var codespacesSubnetName = 'snet-codespaces'
 var containerAppsNsgName = 'nsg-${resourcePrefix}-container-apps'
 var privateEndpointsNsgName = 'nsg-${resourcePrefix}-private-endpoints'
+var codespacesNsgName = 'nsg-${resourcePrefix}-codespaces'
 
 // ============================================================================
 // Network Security Groups
@@ -90,6 +95,73 @@ resource privateEndpointsNsg 'Microsoft.Network/networkSecurityGroups@2024-01-01
   }
 }
 
+@description('NSG for GitHub Codespaces subnet - allows dev access to private endpoints')
+resource codespacesNsg 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
+  name: codespacesNsgName
+  location: location
+  tags: tags
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowPostgreSQL'
+        properties: {
+          priority: 100
+          direction: 'Outbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: '*'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '5432'
+          description: 'Allow PostgreSQL access to private endpoint'
+        }
+      }
+      {
+        name: 'AllowStorage'
+        properties: {
+          priority: 110
+          direction: 'Outbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: '*'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'Storage'
+          destinationPortRange: '443'
+          description: 'Allow Azure Storage access'
+        }
+      }
+      {
+        name: 'AllowOpenAI'
+        properties: {
+          priority: 120
+          direction: 'Outbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: '*'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'AzureOpenAI'
+          destinationPortRange: '443'
+          description: 'Allow Azure OpenAI access'
+        }
+      }
+      {
+        name: 'AllowKeyVault'
+        properties: {
+          priority: 130
+          direction: 'Outbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: '*'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'AzureKeyVault'
+          destinationPortRange: '443'
+          description: 'Allow Key Vault access for secrets'
+        }
+      }
+    ]
+  }
+}
+
 // ============================================================================
 // Virtual Network
 // ============================================================================
@@ -136,6 +208,26 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
       }
+      {
+        name: codespacesSubnetName
+        properties: {
+          addressPrefix: codespacesSubnetPrefix
+          networkSecurityGroup: {
+            id: codespacesNsg.id
+          }
+          // GitHub Codespaces VNet integration requires this delegation
+          delegations: [
+            {
+              name: 'GitHub.Network.networkSettings'
+              properties: {
+                serviceName: 'GitHub.Network/networkSettings'
+              }
+            }
+          ]
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+      }
     ]
   }
 }
@@ -161,3 +253,9 @@ output privateEndpointsSubnetId string = vnet.properties.subnets[1].id
 
 @description('Private Endpoints subnet name')
 output privateEndpointsSubnetName string = privateEndpointsSubnetName
+
+@description('GitHub Codespaces subnet resource ID')
+output codespacesSubnetId string = vnet.properties.subnets[2].id
+
+@description('GitHub Codespaces subnet name')
+output codespacesSubnetName string = codespacesSubnetName
